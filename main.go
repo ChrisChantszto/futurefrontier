@@ -8,6 +8,7 @@ import (
 	"github.com/gofiber/contrib/fiberzap"
 	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/gofiber/fiber/v2/middleware/requestid"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -61,6 +62,12 @@ func main() {
 	// Middlewares
 	app.Use(requestid.New())
 	app.Use(recover.New())
+	app.Use(cors.New(cors.Config{
+		AllowOrigins:     "http://localhost:3000",
+		AllowCredentials: true,
+		AllowHeaders:     "Content-Type, Authorization",
+		ExposeHeaders:    "Set-Cookie",
+	}))
 	app.Use(fiberzap.New(fiberzap.Config{
 		Logger: zlogger,
 	}))
