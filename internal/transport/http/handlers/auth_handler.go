@@ -1,0 +1,172 @@
+package handlers
+
+import (
+	"time"
+
+	"github.com/gofiber/fiber/v2"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.uber.org/zap"
+
+	"github.com/onetakesolutions/onetake-corpsite-backend/internal/config"
+	"github.com/onetakesolutions/onetake-corpsite-backend/internal/models"
+	"github.com/onetakesolutions/onetake-corpsite-backend/internal/service"
+	"github.com/golang-jwt/jwt/v5"
+	"golang.org/x/crypto/bcrypt"
+)
+
+func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *zap.Logger) {
+	svc := service.NewAuthService(db)
+
+	group := r.Group("/auth")
+
+	group.Post("/init-first-user", func(c *fiber.Ctx) error {
+		var body struct{ Email, Password string }
+		if err := c.BodyParser(&body); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+		}
+
+		ctx := c.Context()
+		count, err := svc.CountUsers(ctx)
+		if err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, "db error")
+		}
+		if count > 0 && body.Email != cfg.SuperAdminEmail {
+			return fiber.NewError(fiber.StatusForbidden, "already initialized")
+		}
+		_, err = svc.CreateUser(ctx, body.Email, body.Password, []models.Role{models.RoleSuperAdmin})
+		if err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, "create user failed")
+		}
+		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	group.Post("/login", func(c *fiber.Ctx) error {
+		var body struct{ Email, Password string }
+		if err := c.BodyParser(&body); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+		}
+		u, err := svc.FindUserByEmail(c.Context(), body.Email)
+		if err != nil || !svc.VerifyPassword(u, body.Password) {
+			return fiber.NewError(fiber.StatusUnauthorized, "invalid credentials")
+		}
+
+		accessToken, _ := createJWT(cfg.JWTSecret, u, 15*time.Minute)
+		refreshToken, _ := createJWT(cfg.JWTRefreshSecret, u, 7*24*time.Hour)
+
+		setCookie(c, "access", accessToken, 15*time.Minute, cfg)
+		setCookie(c, "refresh", refreshToken, 7*24*time.Hour, cfg)
+
+		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	group.Post("/logout", func(c *fiber.Ctx) error {
+		clearCookie(c, "access", cfg)
+		clearCookie(c, "refresh", cfg)
+		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	group.Post("/refresh", func(c *fiber.Ctx) error {
+		rt := string(c.Cookies("refresh"))
+		if rt == "" {
+			return fiber.NewError(fiber.StatusUnauthorized, "no refresh")
+		}
+		claims, err := parseJWT(cfg.JWTRefreshSecret, rt)
+		if err != nil {
+			return fiber.NewError(fiber.StatusUnauthorized, "invalid refresh")
+		}
+		u := &models.User{Email: claims["email"].(string), Roles: []models.Role{}}
+		at, _ := createJWT(cfg.JWTSecret, u, 15*time.Minute)
+		setCookie(c, "access", at, 15*time.Minute, cfg)
+		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	group.Post("/forgot-password", func(c *fiber.Ctx) error {
+		var body struct{ Email string }
+		if err := c.BodyParser(&body); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+		}
+		u, err := svc.FindUserByEmail(c.Context(), body.Email)
+		if err != nil {
+			// don’t reveal existence
+			return c.JSON(fiber.Map{"ok": true})
+		}
+		token, _ := svc.GenerateResetToken(c.Context(), u.ID, 30*time.Minute)
+		// TODO: send email via EmailService; if SMTP not set, return token for dev
+		return c.JSON(fiber.Map{"ok": true, "devToken": token})
+	})
+
+	group.Post("/reset-password", func(c *fiber.Ctx) error {
+		var body struct {
+			Token    string
+			Password string
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+		}
+		rt, err := svc.ConsumeResetToken(c.Context(), body.Token)
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid token")
+		}
+		// update user password
+		_, err = db.Collection("users").UpdateByID(c.Context(), rt.UserID, bson.M{"$set": bson.M{
+			"passwordHash": hashPassword(body.Password),
+		}})
+		if err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, "update failed")
+		}
+		return c.JSON(fiber.Map{"ok": true})
+	})
+}
+
+func createJWT(secret string, u *models.User, ttl time.Duration) (string, error) {
+	claims := jwt.MapClaims{
+		"email": u.Email,
+		"exp":   time.Now().Add(ttl).Unix(),
+		"iat":   time.Now().Unix(),
+	}
+	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return t.SignedString([]byte(secret))
+}
+
+func parseJWT(secret, token string) (jwt.MapClaims, error) {
+	parsed, err := jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
+		return []byte(secret), nil
+	})
+	if err != nil || !parsed.Valid {
+		return nil, err
+	}
+	return parsed.Claims.(jwt.MapClaims), nil
+}
+
+func setCookie(c *fiber.Ctx, name, val string, ttl time.Duration, cfg config.Config) {
+	c.Cookie(&fiber.Cookie{
+		Name:     name,
+		Value:    val,
+		Expires:  time.Now().Add(ttl),
+		HTTPOnly: true,
+		Secure:   cfg.SecureCookies,
+		SameSite: "Lax",
+		Domain:   cfg.CookieDomain,
+		Path:     "/",
+	})
+}
+
+func clearCookie(c *fiber.Ctx, name string, cfg config.Config) {
+	c.Cookie(&fiber.Cookie{
+		Name:     name,
+		Value:    "",
+		Expires:  time.Unix(0, 0),
+		HTTPOnly: true,
+		Secure:   cfg.SecureCookies,
+		SameSite: "Lax",
+		Domain:   cfg.CookieDomain,
+		Path:     "/",
+	})
+}
+
+// naive; replace with bcrypt util
+func hashPassword(p string) string {
+	hash, _ := bcrypt.GenerateFromPassword([]byte(p), bcrypt.DefaultCost)
+	return string(hash)
+}
