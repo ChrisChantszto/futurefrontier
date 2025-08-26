@@ -45,12 +45,13 @@ func main() {
 	defer cancel()
 	mongoClient, err := connectMongo(ctx, cfg.MongoURI)
 	if err != nil {
-		zlogger.Sugar().Warnf("mongo connect failed (continuing without DB): %v", err)
+		zlogger.Sugar().Fatalf("mongo connect failed: %v", err)
 	}
 	var db *mongo.Database
-	if mongoClient != nil {
-		db = mongoClient.Database(cfg.DBName)
+	if mongoClient == nil {
+		zlogger.Sugar().Fatal("mongo client is nil; aborting startup")
 	}
+	db = mongoClient.Database(cfg.DBName)
 
 	// Fiber app
 	app := fiber.New(fiber.Config{
