@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -17,6 +18,8 @@ import (
 
 func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *zap.Logger) {
 	svc := service.NewAuthService(db)
+	smtpService := service.NewSMTPService(cfg)
+	otpService := service.NewOTPService(db, cfg, smtpService)
 
 	group := r.Group("/auth")
 
@@ -116,6 +119,148 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			return fiber.NewError(fiber.StatusInternalServerError, "update failed")
 		}
 		return c.JSON(fiber.Map{"ok": true})
+	})
+
+	// OTP endpoints
+	otpGroup := group.Group("/otp")
+
+	// POST /auth/otp/request
+	otpGroup.Post("/request", func(c *fiber.Ctx) error {
+		var body struct {
+			Email   string `json:"email"`
+			Purpose string `json:"purpose"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+		}
+
+		// Validate email
+		email := strings.TrimSpace(body.Email)
+		if email == "" {
+			return fiber.NewError(fiber.StatusBadRequest, "email is required")
+		}
+
+		// Validate purpose
+		purpose := models.OTPPurpose(body.Purpose)
+		if !purpose.IsValid() {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid purpose")
+		}
+
+		// Request OTP
+		requestID, err := otpService.RequestOTP(c.Context(), email, purpose)
+		if err != nil {
+			log.Error("OTP request failed", zap.Error(err), zap.String("email", email))
+			// Return generic message to avoid enumeration
+			return c.JSON(fiber.Map{
+				"message": "If an account exists, we've sent a code to your email",
+			})
+		}
+
+		return c.JSON(fiber.Map{
+			"requestId": requestID,
+			"message":   "If an account exists, we've sent a code to your email",
+		})
+	})
+
+	// POST /auth/otp/verify
+	otpGroup.Post("/verify", func(c *fiber.Ctx) error {
+		var body struct {
+			Email     string `json:"email"`
+			Code      string `json:"code"`
+			RequestID string `json:"requestId,omitempty"`
+			Purpose   string `json:"purpose"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+		}
+
+		// Validate inputs
+		email := strings.TrimSpace(body.Email)
+		code := strings.TrimSpace(body.Code)
+		if email == "" || code == "" {
+			return fiber.NewError(fiber.StatusBadRequest, "email and code are required")
+		}
+
+		// Validate purpose
+		purpose := models.OTPPurpose(body.Purpose)
+		if !purpose.IsValid() {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid purpose")
+		}
+
+		// Verify OTP
+		otpDoc, err := otpService.VerifyOTP(c.Context(), email, code, body.RequestID, purpose)
+		if err != nil {
+			log.Error("OTP verification failed", zap.Error(err), zap.String("email", email))
+			return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired code")
+		}
+
+		// For login purpose, create JWT tokens
+		if purpose == models.OTPPurposeLogin {
+			// Find user by email
+			user, err := svc.FindUserByEmail(c.Context(), email)
+			if err != nil {
+				log.Error("User not found after OTP verification", zap.Error(err), zap.String("email", email))
+				return fiber.NewError(fiber.StatusUnauthorized, "user not found")
+			}
+
+			// Create tokens
+			accessToken, _ := createJWT(cfg.JWTSecret, user, 15*time.Minute)
+			refreshToken, _ := createJWT(cfg.JWTRefreshSecret, user, 7*24*time.Hour)
+
+			// Set cookies
+			setCookie(c, "access", accessToken, 15*time.Minute, cfg)
+			setCookie(c, "refresh", refreshToken, 7*24*time.Hour, cfg)
+
+			return c.JSON(fiber.Map{
+				"ok":      true,
+				"message": "Login successful",
+			})
+		}
+
+		// For other purposes, just return success
+		return c.JSON(fiber.Map{
+			"ok":        true,
+			"message":   "OTP verified successfully",
+			"requestId": otpDoc.RequestID,
+		})
+	})
+
+	// POST /auth/otp/resend
+	otpGroup.Post("/resend", func(c *fiber.Ctx) error {
+		var body struct {
+			Email   string `json:"email"`
+			Purpose string `json:"purpose"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+		}
+
+		// Validate email
+		email := strings.TrimSpace(body.Email)
+		if email == "" {
+			return fiber.NewError(fiber.StatusBadRequest, "email is required")
+		}
+
+		// Validate purpose
+		purpose := models.OTPPurpose(body.Purpose)
+		if !purpose.IsValid() {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid purpose")
+		}
+
+		// Resend OTP
+		requestID, err := otpService.ResendOTP(c.Context(), email, purpose)
+		if err != nil {
+			log.Error("OTP resend failed", zap.Error(err), zap.String("email", email))
+			// Return generic message to avoid enumeration
+			return c.JSON(fiber.Map{
+				"message": "If an account exists, we've sent a new code to your email",
+			})
+		}
+
+		return c.JSON(fiber.Map{
+			"requestId": requestID,
+			"message":   "If an account exists, we've sent a new code to your email",
+		})
 	})
 }
 

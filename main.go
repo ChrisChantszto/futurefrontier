@@ -15,6 +15,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/onetakesolutions/onetake-corpsite-backend/internal/config"
+	"github.com/onetakesolutions/onetake-corpsite-backend/internal/db"
 	"github.com/onetakesolutions/onetake-corpsite-backend/internal/transport/http"
 )
 
@@ -48,11 +49,16 @@ func main() {
 	if err != nil {
 		zlogger.Sugar().Fatalf("mongo connect failed: %v", err)
 	}
-	var db *mongo.Database
+	var database *mongo.Database
 	if mongoClient == nil {
 		zlogger.Sugar().Fatal("mongo client is nil; aborting startup")
 	}
-	db = mongoClient.Database(cfg.DBName)
+	database = mongoClient.Database(cfg.DBName)
+
+	// Initialize database indexes
+	if err := db.InitializeDatabase(ctx, database, zlogger); err != nil {
+		zlogger.Sugar().Warnf("failed to initialize database indexes: %v", err)
+	}
 
 	// Fiber app
 	app := fiber.New(fiber.Config{
@@ -73,7 +79,7 @@ func main() {
 	}))
 
 	// Routes
-	http.SetupRoutes(app, db, cfg, zlogger)
+	http.SetupRoutes(app, database, cfg, zlogger)
 
 	// Start
 	port := cfg.Port

@@ -23,6 +23,13 @@ type Config struct {
 
 	AllowCustomSMTP bool
 	CompanySMTP     SMTPConfig
+	CustomSMTP      SMTPConfig
+
+	// OTP Configuration
+	AppHMACSecret           string
+	OTPTTLMinutes          int
+	OTPMaxAttempts         int
+	OTPResendCooldownSecs  int
 }
 
 type SMTPConfig struct {
@@ -32,6 +39,8 @@ type SMTPConfig struct {
 	Password  string
 	FromName  string
 	FromEmail string
+	ReplyTo   string
+	BCC       string
 	UseTLS    bool
 }
 
@@ -77,14 +86,37 @@ func Load() Config {
 		UserLimit:          atoi(getenv("USER_LIMIT", "100"), 100),
 		LanguageLimit:      atoi(getenv("LANGUAGE_LIMIT", "3"), 3),
 		AllowCustomSMTP:    getbool("ALLOW_CUSTOM_SMTP", false),
+		
+		// Custom SMTP (user-configured)
+		CustomSMTP: SMTPConfig{
+			Host:      getenv("SMTP_HOST", ""),
+			Port:      atoi(getenv("SMTP_PORT", "465"), 465),
+			Username:  getenv("SMTP_USER", ""),
+			Password:  getenv("SMTP_PASS", ""),
+			FromName:  getenv("SMTP_FROM_NAME", ""),
+			FromEmail: getenv("SMTP_FROM_EMAIL", ""),
+			ReplyTo:   getenv("SMTP_REPLY_TO", ""),
+			BCC:       getenv("SMTP_BCC", ""),
+			UseTLS:    true,
+		},
+		
+		// Company SMTP (fallback)
 		CompanySMTP: SMTPConfig{
-			Host:      getenv("ONETAKE_SMTP_HOST", ""),
-			Port:      atoi(getenv("ONETAKE_SMTP_PORT", "587"), 587),
-			Username:  getenv("ONETAKE_SMTP_USER", ""),
-			Password:  getenv("ONETAKE_SMTP_PASS", ""),
-			FromName:  getenv("ONETAKE_SMTP_FROM_NAME", "Onetake CMS"),
-			FromEmail: getenv("ONETAKE_SMTP_FROM_EMAIL", ""),
+			Host:      getenv("ONETAKE_SMTP_HOST", "smtpdm-ap-southeast-1.aliyun.com"),
+			Port:      atoi(getenv("ONETAKE_SMTP_PORT", "465"), 465),
+			Username:  getenv("ONETAKE_SMTP_USER", "system@onetakesolutions.com.hk"),
+			Password:  getenv("ONETAKE_SMTP_PASS", "OneTake07102022"),
+			FromName:  getenv("ONETAKE_SMTP_FROM_NAME", "OTS system"),
+			FromEmail: getenv("ONETAKE_SMTP_FROM_EMAIL", "system@onetakesolutions.com.hk"),
+			ReplyTo:   getenv("ONETAKE_SMTP_REPLY_TO", "info@onetakesolutions.com.hk"),
+			BCC:       getenv("ONETAKE_SMTP_BCC", "tim.ho@onetakesolutions.com.hk"),
 			UseTLS:    getbool("ONETAKE_SMTP_TLS", true),
 		},
+		
+		// OTP Configuration
+		AppHMACSecret:          getenv("APP_HMAC_SECRET", ""),
+		OTPTTLMinutes:         atoi(getenv("OTP_TTL_MINUTES", "5"), 5),
+		OTPMaxAttempts:        atoi(getenv("OTP_MAX_ATTEMPTS", "5"), 5),
+		OTPResendCooldownSecs: atoi(getenv("OTP_RESEND_COOLDOWN_SECONDS", "60"), 60),
 	}
 }
