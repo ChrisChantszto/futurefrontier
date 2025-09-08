@@ -2,12 +2,14 @@ package main
 
 import (
 	"context"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/contrib/fiberzap"
 	"github.com/gofiber/fiber/v2/middleware/recover"
-	"github.com/gofiber/fiber/v2/middleware/requestid"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -16,6 +18,9 @@ import (
 
 	"github.com/onetakesolutions/onetake-corpsite-backend/internal/config"
 	"github.com/onetakesolutions/onetake-corpsite-backend/internal/db"
+	"github.com/onetakesolutions/onetake-corpsite-backend/internal/middleware"
+	"github.com/onetakesolutions/onetake-corpsite-backend/internal/models"
+	"github.com/onetakesolutions/onetake-corpsite-backend/internal/service"
 	"github.com/onetakesolutions/onetake-corpsite-backend/internal/transport/http"
 )
 
@@ -60,13 +65,28 @@ func main() {
 		zlogger.Sugar().Warnf("failed to initialize database indexes: %v", err)
 	}
 
+	// Initialize logger service
+	loggerService, err := service.NewLoggerService(cfg.Logging, database, zlogger)
+	if err != nil {
+		zlogger.Sugar().Fatalf("failed to initialize logger service: %v", err)
+	}
+
+	// Setup graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
 	// Fiber app
 	app := fiber.New(fiber.Config{
-		AppName: "onetake-corpsite-backend",
+		AppName:      "onetake-corpsite-backend",
+		ErrorHandler: middleware.ErrorHandlerMiddleware(loggerService, models.LogConfig{
+			ProjectID:         cfg.Logging.ProjectID,
+			EnableRequestBody: cfg.Logging.EnableRequestBody,
+			MaxBodySize:       cfg.Logging.MaxBodySize,
+		}),
 	})
 
 	// Middlewares
-	app.Use(requestid.New())
+	app.Use(middleware.RequestIDMiddleware())
 	app.Use(recover.New())
 	app.Use(cors.New(cors.Config{
 		AllowOrigins:     "http://localhost:3000",
@@ -74,20 +94,51 @@ func main() {
 		AllowHeaders:     "Content-Type, Authorization",
 		ExposeHeaders:    "Set-Cookie",
 	}))
+	
+	// Custom logging middleware
+	app.Use(middleware.LoggerMiddleware(loggerService, models.LogConfig{
+		ProjectID:         cfg.Logging.ProjectID,
+		EnableRequestBody: cfg.Logging.EnableRequestBody,
+		EnableResponseBody: cfg.Logging.EnableResponseBody,
+		EnableHeaders:     cfg.Logging.EnableHeaders,
+		MaxBodySize:       cfg.Logging.MaxBodySize,
+		SensitiveHeaders:  []string{"authorization", "cookie", "x-api-key"},
+		SensitivePaths:    []string{"/auth/otp/request", "/auth/otp/verify"},
+	}, zlogger))
+
+	// Keep fiberzap for development visibility
 	app.Use(fiberzap.New(fiberzap.Config{
 		Logger: zlogger,
 	}))
 
+	// Add logging stats endpoint
+	app.Get("/health/logging", middleware.LoggingStatsHandler(loggerService))
+
 	// Routes
 	http.SetupRoutes(app, database, cfg, zlogger)
 
-	// Start
-	port := cfg.Port
-	if port == "" {
-		port = "8080"
+	// Start server in goroutine
+	go func() {
+		port := cfg.Port
+		if port == "" {
+			port = "8080"
+		}
+		zlogger.Sugar().Infof("listening on :%s", port)
+		if err := app.Listen(":" + port); err != nil {
+			zlogger.Sugar().Error("Server failed to start:", err)
+		}
+	}()
+
+	// Wait for shutdown signal
+	<-sigChan
+	zlogger.Info("Shutting down server...")
+
+	// Graceful shutdown
+	if err := app.Shutdown(); err != nil {
+		zlogger.Sugar().Error("Server shutdown error:", err)
 	}
-	zlogger.Sugar().Infof("listening on :%s", port)
-	if err := app.Listen(":" + port); err != nil {
-		zlogger.Sugar().Fatal(err)
-	}
+
+	// Shutdown logger service
+	loggerService.Shutdown()
+	zlogger.Info("Server shutdown complete")
 }

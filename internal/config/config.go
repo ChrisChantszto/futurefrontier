@@ -30,6 +30,9 @@ type Config struct {
 	OTPTTLMinutes          int
 	OTPMaxAttempts         int
 	OTPResendCooldownSecs  int
+
+	// Logging Configuration
+	Logging LoggingConfig
 }
 
 type SMTPConfig struct {
@@ -42,6 +45,22 @@ type SMTPConfig struct {
 	ReplyTo   string
 	BCC       string
 	UseTLS    bool
+}
+
+type LoggingConfig struct {
+	ProjectID           string
+	ElasticsearchURL    string
+	ElasticsearchUser   string
+	ElasticsearchPass   string
+	EnableRequestBody   bool
+	EnableResponseBody  bool
+	EnableHeaders       bool
+	MaxBodySize         int64
+	QueueSize          int
+	WorkerCount        int
+	RetryAttempts      int
+	RetryInterval      int // seconds
+	LocalMode          bool // for development - logs to file instead of ES
 }
 
 func getenv(key, def string) string {
@@ -118,5 +137,22 @@ func Load() Config {
 		OTPTTLMinutes:         atoi(getenv("OTP_TTL_MINUTES", "5"), 5),
 		OTPMaxAttempts:        atoi(getenv("OTP_MAX_ATTEMPTS", "5"), 5),
 		OTPResendCooldownSecs: atoi(getenv("OTP_RESEND_COOLDOWN_SECONDS", "60"), 60),
+
+		// Logging Configuration
+		Logging: LoggingConfig{
+			ProjectID:           getenv("LOG_PROJECT_ID", "onetake-corpsite-backend"),
+			ElasticsearchURL:    getenv("ELASTICSEARCH_URL", "http://localhost:9200"),
+			ElasticsearchUser:   getenv("ELASTICSEARCH_USER", ""),
+			ElasticsearchPass:   getenv("ELASTICSEARCH_PASS", ""),
+			EnableRequestBody:   getbool("LOG_ENABLE_REQUEST_BODY", false),
+			EnableResponseBody:  getbool("LOG_ENABLE_RESPONSE_BODY", false),
+			EnableHeaders:       getbool("LOG_ENABLE_HEADERS", false),
+			MaxBodySize:         int64(atoi(getenv("LOG_MAX_BODY_SIZE", "1024"), 1024)),
+			QueueSize:          atoi(getenv("LOG_QUEUE_SIZE", "1000"), 1000),
+			WorkerCount:        atoi(getenv("LOG_WORKER_COUNT", "3"), 3),
+			RetryAttempts:      atoi(getenv("LOG_RETRY_ATTEMPTS", "3"), 3),
+			RetryInterval:      atoi(getenv("LOG_RETRY_INTERVAL", "30"), 30),
+			LocalMode:          getbool("LOG_LOCAL_MODE", true), // Default to local for development
+		},
 	}
 }
