@@ -23,6 +23,20 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 
 	group := r.Group("/auth")
 
+	// GET /auth/check-first-user - Check if first user exists
+	group.Get("/check-first-user", func(c *fiber.Ctx) error {
+		ctx := c.Context()
+		count, err := svc.CountUsers(ctx)
+		if err != nil {
+			log.Error("Failed to count users", zap.Error(err))
+			return fiber.NewError(fiber.StatusInternalServerError, "db error")
+		}
+		
+		return c.JSON(fiber.Map{
+			"exists": count > 0,
+		})
+	})
+
 	group.Post("/init-first-user", func(c *fiber.Ctx) error {
 		var body struct{ Email, Password string }
 		if err := c.BodyParser(&body); err != nil {
