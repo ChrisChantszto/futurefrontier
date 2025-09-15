@@ -12,6 +12,7 @@ import (
 	"github.com/onetakesolutions/onetake-corpsite-backend/internal/config"
 	"github.com/onetakesolutions/onetake-corpsite-backend/internal/models"
 	"github.com/onetakesolutions/onetake-corpsite-backend/internal/service"
+	"github.com/onetakesolutions/onetake-corpsite-backend/internal/utils"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -29,10 +30,10 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 		count, err := svc.CountUsers(ctx)
 		if err != nil {
 			log.Error("Failed to count users", zap.Error(err))
-			return fiber.NewError(fiber.StatusInternalServerError, "db error")
+			return utils.RespondWithError(c, "Database error occurred", models.ErrAppServer, nil)
 		}
 		
-		return c.JSON(fiber.Map{
+		return utils.RespondWithSuccess(c, utils.MsgDataFound, fiber.Map{
 			"exists": count > 0,
 		})
 	})
@@ -40,32 +41,37 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 	group.Post("/init-first-user", func(c *fiber.Ctx) error {
 		var body struct{ Email, Password string }
 		if err := c.BodyParser(&body); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+			return utils.RespondWithError(c, "Invalid request body", models.ErrMissingParams, nil)
 		}
 
 		ctx := c.Context()
 		count, err := svc.CountUsers(ctx)
 		if err != nil {
-			return fiber.NewError(fiber.StatusInternalServerError, "db error")
+			return utils.RespondWithError(c, "Database error occurred", models.ErrAppServer, nil)
 		}
 		if count > 0 && body.Email != cfg.SuperAdminEmail {
-			return fiber.NewError(fiber.StatusForbidden, "already initialized")
+			return utils.RespondWithError(c, "System already initialized", models.ErrForbidden, nil)
 		}
-		_, err = svc.CreateUser(ctx, body.Email, body.Password, []models.Role{models.RoleSuperAdmin})
+		user, err := svc.CreateUser(ctx, body.Email, body.Password, []models.Role{models.RoleSuperAdmin})
 		if err != nil {
-			return fiber.NewError(fiber.StatusInternalServerError, "create user failed")
+			return utils.RespondWithError(c, "Failed to create user", models.ErrAppServer, nil)
 		}
-		return c.JSON(fiber.Map{"ok": true})
+		return utils.RespondWithSuccess(c, "First user created successfully", fiber.Map{
+			"user": fiber.Map{
+				"email": user.Email,
+				"roles": user.Roles,
+			},
+		})
 	})
 
 	group.Post("/login", func(c *fiber.Ctx) error {
 		var body struct{ Email, Password string }
 		if err := c.BodyParser(&body); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+			return utils.RespondWithError(c, "Invalid request body", models.ErrMissingParams, nil)
 		}
 		u, err := svc.FindUserByEmail(c.Context(), body.Email)
 		if err != nil || !svc.VerifyPassword(u, body.Password) {
-			return fiber.NewError(fiber.StatusUnauthorized, "invalid credentials")
+			return utils.RespondWithError(c, "Invalid email or password", models.ErrInvalidEmailPass, nil)
 		}
 
 		accessToken, _ := createJWT(cfg.JWTSecret, u, 15*time.Minute)
@@ -74,43 +80,52 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 		setCookie(c, "access", accessToken, 15*time.Minute, cfg)
 		setCookie(c, "refresh", refreshToken, 7*24*time.Hour, cfg)
 
-		return c.JSON(fiber.Map{"ok": true})
+		return utils.RespondWithSuccess(c, utils.MsgLoginSuccess, fiber.Map{
+			"user": fiber.Map{
+				"email": u.Email,
+				"roles": u.Roles,
+			},
+		})
 	})
 
 	group.Post("/logout", func(c *fiber.Ctx) error {
 		clearCookie(c, "access", cfg)
 		clearCookie(c, "refresh", cfg)
-		return c.JSON(fiber.Map{"ok": true})
+		return utils.RespondWithSuccess(c, utils.MsgLogoutSuccess, nil)
 	})
 
 	group.Post("/refresh", func(c *fiber.Ctx) error {
 		rt := string(c.Cookies("refresh"))
 		if rt == "" {
-			return fiber.NewError(fiber.StatusUnauthorized, "no refresh")
+			return utils.RespondWithError(c, "No refresh token provided", models.ErrInvalidToken, nil)
 		}
 		claims, err := parseJWT(cfg.JWTRefreshSecret, rt)
 		if err != nil {
-			return fiber.NewError(fiber.StatusUnauthorized, "invalid refresh")
+			return utils.RespondWithError(c, "Invalid refresh token", models.ErrInvalidToken, nil)
 		}
 		u := &models.User{Email: claims["email"].(string), Roles: []models.Role{}}
 		at, _ := createJWT(cfg.JWTSecret, u, 15*time.Minute)
 		setCookie(c, "access", at, 15*time.Minute, cfg)
-		return c.JSON(fiber.Map{"ok": true})
+		return utils.RespondWithSuccess(c, "Token refreshed successfully", fiber.Map{
+			"email": u.Email,
+		})
 	})
 
 	group.Post("/forgot-password", func(c *fiber.Ctx) error {
 		var body struct{ Email string }
 		if err := c.BodyParser(&body); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+			return utils.RespondWithError(c, "Invalid request body", models.ErrMissingParams, nil)
 		}
 		u, err := svc.FindUserByEmail(c.Context(), body.Email)
 		if err != nil {
-			// don’t reveal existence
-			return c.JSON(fiber.Map{"ok": true})
+			// don't reveal existence
+			return utils.RespondWithSuccess(c, "If an account exists, a password reset link has been sent", nil)
 		}
 		token, _ := svc.GenerateResetToken(c.Context(), u.ID, 30*time.Minute)
 		// TODO: send email via EmailService; if SMTP not set, return token for dev
-		return c.JSON(fiber.Map{"ok": true, "devToken": token})
+		return utils.RespondWithSuccess(c, "If an account exists, a password reset link has been sent", fiber.Map{
+			"devToken": token, // Only for development
+		})
 	})
 
 	group.Post("/reset-password", func(c *fiber.Ctx) error {
@@ -119,20 +134,20 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			Password string
 		}
 		if err := c.BodyParser(&body); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+			return utils.RespondWithError(c, "Invalid request body", models.ErrMissingParams, nil)
 		}
 		rt, err := svc.ConsumeResetToken(c.Context(), body.Token)
 		if err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid token")
+			return utils.RespondWithError(c, "Invalid or expired token", models.ErrInvalidToken, nil)
 		}
 		// update user password
 		_, err = db.Collection("users").UpdateByID(c.Context(), rt.UserID, bson.M{"$set": bson.M{
 			"passwordHash": hashPassword(body.Password),
 		}})
 		if err != nil {
-			return fiber.NewError(fiber.StatusInternalServerError, "update failed")
+			return utils.RespondWithError(c, "Failed to update password", models.ErrAppServer, nil)
 		}
-		return c.JSON(fiber.Map{"ok": true})
+		return utils.RespondWithSuccess(c, "Password has been reset successfully", nil)
 	})
 
 	// OTP endpoints
@@ -145,19 +160,19 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			Purpose string `json:"purpose"`
 		}
 		if err := c.BodyParser(&body); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+			return utils.RespondWithError(c, "Invalid request body", models.ErrMissingParams, nil)
 		}
 
 		// Validate email
 		email := strings.TrimSpace(body.Email)
 		if email == "" {
-			return fiber.NewError(fiber.StatusBadRequest, "email is required")
+			return utils.RespondWithError(c, "Email is required", models.ErrMissingParams, nil)
 		}
 
 		// Validate purpose
 		purpose := models.OTPPurpose(body.Purpose)
 		if !purpose.IsValid() {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid purpose")
+			return utils.RespondWithError(c, "Invalid purpose", models.ErrInvalidLoginType, nil)
 		}
 
 		// Request OTP
@@ -165,14 +180,11 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 		if err != nil {
 			log.Error("OTP request failed", zap.Error(err), zap.String("email", email))
 			// Return generic message to avoid enumeration
-			return c.JSON(fiber.Map{
-				"message": "If an account exists, we've sent a code to your email",
-			})
+			return utils.RespondWithSuccess(c, "If an account exists, we've sent a code to your email", nil)
 		}
 
-		return c.JSON(fiber.Map{
+		return utils.RespondWithSuccess(c, "If an account exists, we've sent a code to your email", fiber.Map{
 			"requestId": requestID,
-			"message":   "If an account exists, we've sent a code to your email",
 		})
 	})
 
@@ -185,27 +197,27 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			Purpose   string `json:"purpose"`
 		}
 		if err := c.BodyParser(&body); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+			return utils.RespondWithError(c, "Invalid request body", models.ErrMissingParams, nil)
 		}
 
 		// Validate inputs
 		email := strings.TrimSpace(body.Email)
 		code := strings.TrimSpace(body.Code)
 		if email == "" || code == "" {
-			return fiber.NewError(fiber.StatusBadRequest, "email and code are required")
+			return utils.RespondWithError(c, "Email and code are required", models.ErrMissingParams, nil)
 		}
 
 		// Validate purpose
 		purpose := models.OTPPurpose(body.Purpose)
 		if !purpose.IsValid() {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid purpose")
+			return utils.RespondWithError(c, "Invalid purpose", models.ErrInvalidLoginType, nil)
 		}
 
 		// Verify OTP
 		otpDoc, err := otpService.VerifyOTP(c.Context(), email, code, body.RequestID, purpose)
 		if err != nil {
 			log.Error("OTP verification failed", zap.Error(err), zap.String("email", email))
-			return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired code")
+			return utils.RespondWithError(c, "Invalid or expired code", models.ErrInvalidOTP, nil)
 		}
 
 		// For login purpose, create JWT tokens
@@ -214,7 +226,7 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			user, err := svc.FindUserByEmail(c.Context(), email)
 			if err != nil {
 				log.Error("User not found after OTP verification", zap.Error(err), zap.String("email", email))
-				return fiber.NewError(fiber.StatusUnauthorized, "user not found")
+				return utils.RespondWithError(c, "User not found", models.ErrUserNotFound, nil)
 			}
 
 			// Create tokens
@@ -225,16 +237,16 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			setCookie(c, "access", accessToken, 15*time.Minute, cfg)
 			setCookie(c, "refresh", refreshToken, 7*24*time.Hour, cfg)
 
-			return c.JSON(fiber.Map{
-				"ok":      true,
-				"message": "Login successful",
+			return utils.RespondWithSuccess(c, utils.MsgLoginSuccess, fiber.Map{
+				"user": fiber.Map{
+					"email": user.Email,
+					"roles": user.Roles,
+				},
 			})
 		}
 
 		// For other purposes, just return success
-		return c.JSON(fiber.Map{
-			"ok":        true,
-			"message":   "OTP verified successfully",
+		return utils.RespondWithSuccess(c, "OTP verified successfully", fiber.Map{
 			"requestId": otpDoc.RequestID,
 		})
 	})
@@ -246,19 +258,19 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			Purpose string `json:"purpose"`
 		}
 		if err := c.BodyParser(&body); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+			return utils.RespondWithError(c, "Invalid request body", models.ErrMissingParams, nil)
 		}
 
 		// Validate email
 		email := strings.TrimSpace(body.Email)
 		if email == "" {
-			return fiber.NewError(fiber.StatusBadRequest, "email is required")
+			return utils.RespondWithError(c, "Email is required", models.ErrMissingParams, nil)
 		}
 
 		// Validate purpose
 		purpose := models.OTPPurpose(body.Purpose)
 		if !purpose.IsValid() {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid purpose")
+			return utils.RespondWithError(c, "Invalid purpose", models.ErrInvalidLoginType, nil)
 		}
 
 		// Resend OTP
@@ -266,14 +278,11 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 		if err != nil {
 			log.Error("OTP resend failed", zap.Error(err), zap.String("email", email))
 			// Return generic message to avoid enumeration
-			return c.JSON(fiber.Map{
-				"message": "If an account exists, we've sent a new code to your email",
-			})
+			return utils.RespondWithSuccess(c, "If an account exists, we've sent a new code to your email", nil)
 		}
 
-		return c.JSON(fiber.Map{
+		return utils.RespondWithSuccess(c, "If an account exists, we've sent a new code to your email", fiber.Map{
 			"requestId": requestID,
-			"message":   "If an account exists, we've sent a new code to your email",
 		})
 	})
 }
