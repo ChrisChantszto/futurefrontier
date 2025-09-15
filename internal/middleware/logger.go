@@ -260,11 +260,12 @@ func ErrorHandlerMiddleware(loggerService *service.LoggerService, config models.
 		// Log error asynchronously
 		loggerService.LogError(errorLogEntry)
 
-		// Set response
+		// Set standardized response envelope while preserving HTTP status code
 		c.Set(fiber.HeaderContentType, fiber.MIMEApplicationJSON)
 		return c.Status(code).JSON(fiber.Map{
-			"error":      true,
+			"success":    false,
 			"message":    message,
+			"data":       fiber.Map{},
 			"request_id": requestID,
 		})
 	}
