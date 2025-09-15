@@ -103,7 +103,7 @@ func main() {
 		EnableHeaders:     cfg.Logging.EnableHeaders,
 		MaxBodySize:       cfg.Logging.MaxBodySize,
 		SensitiveHeaders:  []string{"authorization", "cookie", "x-api-key"},
-		SensitivePaths:    []string{"/auth/otp/request", "/auth/otp/verify"},
+		SensitivePaths:    []string{"/auth/otp/request", "/auth/otp/verify", "/auth/totp/request", "/auth/totp/login", "/auth/forgot-password/request-totp", "/auth/forgot-password/verify-totp"},
 	}, zlogger))
 
 	// Keep fiberzap for development visibility

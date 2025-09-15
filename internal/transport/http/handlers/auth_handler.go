@@ -6,6 +6,7 @@ import (
 
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 
@@ -126,9 +127,131 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 		if err != nil {
 			return fiber.NewError(fiber.StatusBadRequest, "invalid token")
 		}
-		// update user password
-		_, err = db.Collection("users").UpdateByID(c.Context(), rt.UserID, bson.M{"$set": bson.M{
+		// update user password by ObjectID
+		oid, err := primitive.ObjectIDFromHex(rt.UserID)
+		if err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid user id")
+		}
+		_, err = db.Collection("users").UpdateByID(c.Context(), oid, bson.M{"$set": bson.M{
 			"passwordHash": hashPassword(body.Password),
+			"updatedAt":   time.Now().UTC(),
+		}})
+		if err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, "update failed")
+		}
+		return JSONSuccessWithExtra(c, "Password reset successfully", nil, fiber.Map{"ok": true})
+	})
+
+	// TOTP endpoints (email-based one-time codes with time limit)
+	// POST /auth/totp/request - request TOTP for login (default) or forgetPassword purpose
+	group.Post("/totp/request", func(c *fiber.Ctx) error {
+		var body struct {
+			Email   string `json:"email"`
+			Purpose string `json:"purpose"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+		}
+		email := strings.TrimSpace(body.Email)
+		if email == "" {
+			return fiber.NewError(fiber.StatusBadRequest, "email is required")
+		}
+		purpose := models.OTPPurpose(body.Purpose)
+		if body.Purpose == "" { // default to login
+			purpose = models.OTPPurposeLogin
+		}
+		if !purpose.IsValid() {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid purpose")
+		}
+		requestID, err := otpService.RequestOTP(c.Context(), email, purpose)
+		if err != nil {
+			log.Error("TOTP request failed", zap.Error(err), zap.String("email", email))
+			return JSONSuccessWithExtra(c, "If an account exists, we've sent a code to your email", nil, nil)
+		}
+		return JSONSuccessWithExtra(c, "TOTP sent", fiber.Map{"requestId": requestID}, fiber.Map{"requestId": requestID})
+	})
+
+	// POST /auth/totp/login - verify TOTP for login and issue JWT cookies
+	group.Post("/totp/login", func(c *fiber.Ctx) error {
+		var body struct {
+			Email     string `json:"email"`
+			Code      string `json:"code"`
+			RequestID string `json:"requestId,omitempty"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+		}
+		email := strings.TrimSpace(body.Email)
+		code := strings.TrimSpace(body.Code)
+		if email == "" || code == "" {
+			return fiber.NewError(fiber.StatusBadRequest, "email and code are required")
+		}
+		_, err := otpService.VerifyOTP(c.Context(), email, code, body.RequestID, models.OTPPurposeLogin)
+		if err != nil {
+			log.Error("TOTP login verification failed", zap.Error(err), zap.String("email", email))
+			return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired code")
+		}
+		// Find user and issue tokens
+		user, err := svc.FindUserByEmail(c.Context(), email)
+		if err != nil {
+			return fiber.NewError(fiber.StatusUnauthorized, "user not found")
+		}
+		accessToken, _ := createJWT(cfg.JWTSecret, user, 15*time.Minute)
+		refreshToken, _ := createJWT(cfg.JWTRefreshSecret, user, 7*24*time.Hour)
+		setCookie(c, "access", accessToken, 15*time.Minute, cfg)
+		setCookie(c, "refresh", refreshToken, 7*24*time.Hour, cfg)
+		return JSONSuccessWithExtra(c, "Login successful", nil, fiber.Map{"ok": true})
+	})
+
+	// Forgot password via TOTP: request and verify
+	// POST /auth/forgot-password/request-totp
+	group.Post("/forgot-password/request-totp", func(c *fiber.Ctx) error {
+		var body struct{ Email string `json:"email"` }
+		if err := c.BodyParser(&body); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+		}
+		email := strings.TrimSpace(body.Email)
+		if email == "" {
+			return fiber.NewError(fiber.StatusBadRequest, "email is required")
+		}
+		requestID, err := otpService.RequestOTP(c.Context(), email, models.OTPPurposeForgetPassword)
+		if err != nil {
+			log.Error("Forgot-password TOTP request failed", zap.Error(err), zap.String("email", email))
+			return JSONSuccessWithExtra(c, "If an account exists, we've sent a code to your email", nil, nil)
+		}
+		return JSONSuccessWithExtra(c, "TOTP sent", fiber.Map{"requestId": requestID}, fiber.Map{"requestId": requestID})
+	})
+
+	// POST /auth/forgot-password/verify-totp
+	group.Post("/forgot-password/verify-totp", func(c *fiber.Ctx) error {
+		var body struct {
+			Email     string `json:"email"`
+			Code      string `json:"code"`
+			RequestID string `json:"requestId,omitempty"`
+			Password  string `json:"password"`
+		}
+		if err := c.BodyParser(&body); err != nil {
+			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+		}
+		email := strings.TrimSpace(body.Email)
+		code := strings.TrimSpace(body.Code)
+		if email == "" || code == "" || strings.TrimSpace(body.Password) == "" {
+			return fiber.NewError(fiber.StatusBadRequest, "email, code and password are required")
+		}
+		_, err := otpService.VerifyOTP(c.Context(), email, code, body.RequestID, models.OTPPurposeForgetPassword)
+		if err != nil {
+			log.Error("Forgot-password TOTP verification failed", zap.Error(err), zap.String("email", email))
+			return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired code")
+		}
+		// Update password for the user
+		u, err := svc.FindUserByEmail(c.Context(), email)
+		if err != nil {
+			return fiber.NewError(fiber.StatusUnauthorized, "user not found")
+		}
+		// Update by email to avoid ObjectID vs string mismatch on _id
+		_, err = db.Collection("users").UpdateOne(c.Context(), bson.M{"email": u.Email}, bson.M{"$set": bson.M{
+			"passwordHash": hashPassword(body.Password),
+			"updatedAt":   time.Now().UTC(),
 		}})
 		if err != nil {
 			return fiber.NewError(fiber.StatusInternalServerError, "update failed")

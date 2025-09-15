@@ -134,7 +134,7 @@ func Load() Config {
 		
 		// OTP Configuration
 		AppHMACSecret:          getenv("APP_HMAC_SECRET", ""),
-		OTPTTLMinutes:         atoi(getenv("OTP_TTL_MINUTES", "5"), 5),
+		OTPTTLMinutes:         atoi(getenv("OTP_TTL_MINUTES", "10"), 10),
 		OTPMaxAttempts:        atoi(getenv("OTP_MAX_ATTEMPTS", "5"), 5),
 		OTPResendCooldownSecs: atoi(getenv("OTP_RESEND_COOLDOWN_SECONDS", "60"), 60),
 
