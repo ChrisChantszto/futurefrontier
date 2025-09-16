@@ -111,7 +111,7 @@ func main() {
 		Logger: zlogger,
 	}))
 
-	// Add logging stats endpoint
+	// Add logging stats endpoint - public access
 	app.Get("/health/logging", middleware.LoggingStatsHandler(loggerService))
 
 	// Routes

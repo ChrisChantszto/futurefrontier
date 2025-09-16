@@ -42,20 +42,20 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 	group.Post("/init-first-user", func(c *fiber.Ctx) error {
 		var body struct{ Email, Password string }
 		if err := c.BodyParser(&body); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+			return JSONErrorAlways200(c, "invalid body", 1001, nil)
 		}
 
 		ctx := c.Context()
 		count, err := svc.CountUsers(ctx)
 		if err != nil {
-			return fiber.NewError(fiber.StatusInternalServerError, "db error")
+			return JSONErrorAlways200(c, "db error", 1002, nil)
 		}
 		if count > 0 && body.Email != cfg.SuperAdminEmail {
-			return fiber.NewError(fiber.StatusForbidden, "already initialized")
+			return JSONErrorAlways200(c, "already initialized", 1003, nil)
 		}
 		_, err = svc.CreateUser(ctx, body.Email, body.Password, []models.Role{models.RoleSuperAdmin})
 		if err != nil {
-			return fiber.NewError(fiber.StatusInternalServerError, "create user failed")
+			return JSONErrorAlways200(c, "create user failed", 1004, nil)
 		}
 		return JSONSuccessWithExtra(c, "User initialized", nil, fiber.Map{"ok": true})
 	})
@@ -63,11 +63,11 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 	group.Post("/login", func(c *fiber.Ctx) error {
 		var body struct{ Email, Password string }
 		if err := c.BodyParser(&body); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+			return JSONErrorAlways200(c, "invalid body", 3001, nil)
 		}
 		u, err := svc.FindUserByEmail(c.Context(), body.Email)
 		if err != nil || !svc.VerifyPassword(u, body.Password) {
-			return fiber.NewError(fiber.StatusUnauthorized, "invalid credentials")
+			return JSONErrorAlways200(c, "invalid credentials", 3002, nil)
 		}
 
 		accessToken, _ := createJWT(cfg.JWTSecret, u, 15*time.Minute)
@@ -88,11 +88,11 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 	group.Post("/refresh", func(c *fiber.Ctx) error {
 		rt := string(c.Cookies("refresh"))
 		if rt == "" {
-			return fiber.NewError(fiber.StatusUnauthorized, "no refresh")
+			return JSONErrorAlways200(c, "no refresh token", 4001, nil)
 		}
 		claims, err := parseJWT(cfg.JWTRefreshSecret, rt)
 		if err != nil {
-			return fiber.NewError(fiber.StatusUnauthorized, "invalid refresh")
+			return JSONErrorAlways200(c, "invalid refresh token", 4002, nil)
 		}
 		u := &models.User{Email: claims["email"].(string), Roles: []models.Role{}}
 		at, _ := createJWT(cfg.JWTSecret, u, 15*time.Minute)
@@ -121,23 +121,23 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			Password string
 		}
 		if err := c.BodyParser(&body); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+			return JSONErrorAlways200(c, "invalid body", 5001, nil)
 		}
 		rt, err := svc.ConsumeResetToken(c.Context(), body.Token)
 		if err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid token")
+			return JSONErrorAlways200(c, "invalid token", 5002, nil)
 		}
 		// update user password by ObjectID
 		oid, err := primitive.ObjectIDFromHex(rt.UserID)
 		if err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid user id")
+			return JSONErrorAlways200(c, "invalid user id", 5003, nil)
 		}
 		_, err = db.Collection("users").UpdateByID(c.Context(), oid, bson.M{"$set": bson.M{
 			"passwordHash": hashPassword(body.Password),
 			"updatedAt":   time.Now().UTC(),
 		}})
 		if err != nil {
-			return fiber.NewError(fiber.StatusInternalServerError, "update failed")
+			return JSONErrorAlways200(c, "update failed", 5004, nil)
 		}
 		return JSONSuccessWithExtra(c, "Password reset successfully", nil, fiber.Map{"ok": true})
 	})
@@ -150,18 +150,18 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			Purpose string `json:"purpose"`
 		}
 		if err := c.BodyParser(&body); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+			return JSONErrorAlways200(c, "invalid body", 7001, nil)
 		}
 		email := strings.TrimSpace(body.Email)
 		if email == "" {
-			return fiber.NewError(fiber.StatusBadRequest, "email is required")
+			return JSONErrorAlways200(c, "email is required", 7002, nil)
 		}
 		purpose := models.OTPPurpose(body.Purpose)
 		if body.Purpose == "" { // default to login
 			purpose = models.OTPPurposeLogin
 		}
 		if !purpose.IsValid() {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid purpose")
+			return JSONErrorAlways200(c, "invalid purpose", 7003, nil)
 		}
 		requestID, err := otpService.RequestOTP(c.Context(), email, purpose)
 		if err != nil {
@@ -179,22 +179,22 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			RequestID string `json:"requestId,omitempty"`
 		}
 		if err := c.BodyParser(&body); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+			return JSONErrorAlways200(c, "invalid body", 8001, nil)
 		}
 		email := strings.TrimSpace(body.Email)
 		code := strings.TrimSpace(body.Code)
 		if email == "" || code == "" {
-			return fiber.NewError(fiber.StatusBadRequest, "email and code are required")
+			return JSONErrorAlways200(c, "email and code are required", 8002, nil)
 		}
 		_, err := otpService.VerifyOTP(c.Context(), email, code, body.RequestID, models.OTPPurposeLogin)
 		if err != nil {
 			log.Error("TOTP login verification failed", zap.Error(err), zap.String("email", email))
-			return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired code")
+			return JSONErrorAlways200(c, "invalid or expired code", 8003, nil)
 		}
 		// Find user and issue tokens
 		user, err := svc.FindUserByEmail(c.Context(), email)
 		if err != nil {
-			return fiber.NewError(fiber.StatusUnauthorized, "user not found")
+			return JSONErrorAlways200(c, "user not found", 8004, nil)
 		}
 		accessToken, _ := createJWT(cfg.JWTSecret, user, 15*time.Minute)
 		refreshToken, _ := createJWT(cfg.JWTRefreshSecret, user, 7*24*time.Hour)
@@ -231,22 +231,22 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			Password  string `json:"password"`
 		}
 		if err := c.BodyParser(&body); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+			return JSONErrorAlways200(c, "invalid body", 9001, nil)
 		}
 		email := strings.TrimSpace(body.Email)
 		code := strings.TrimSpace(body.Code)
 		if email == "" || code == "" || strings.TrimSpace(body.Password) == "" {
-			return fiber.NewError(fiber.StatusBadRequest, "email, code and password are required")
+			return JSONErrorAlways200(c, "email, code and password are required", 9002, nil)
 		}
 		_, err := otpService.VerifyOTP(c.Context(), email, code, body.RequestID, models.OTPPurposeForgetPassword)
 		if err != nil {
 			log.Error("Forgot-password TOTP verification failed", zap.Error(err), zap.String("email", email))
-			return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired code")
+			return JSONErrorAlways200(c, "invalid or expired code", 9003, nil)
 		}
 		// Update password for the user
 		u, err := svc.FindUserByEmail(c.Context(), email)
 		if err != nil {
-			return fiber.NewError(fiber.StatusUnauthorized, "user not found")
+			return JSONErrorAlways200(c, "user not found", 9004, nil)
 		}
 		// Update by email to avoid ObjectID vs string mismatch on _id
 		_, err = db.Collection("users").UpdateOne(c.Context(), bson.M{"email": u.Email}, bson.M{"$set": bson.M{
@@ -254,7 +254,7 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			"updatedAt":   time.Now().UTC(),
 		}})
 		if err != nil {
-			return fiber.NewError(fiber.StatusInternalServerError, "update failed")
+			return JSONErrorAlways200(c, "update failed", 9005, nil)
 		}
 		return JSONSuccessWithExtra(c, "Password reset successfully", nil, fiber.Map{"ok": true})
 	})
@@ -305,27 +305,27 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			Purpose   string `json:"purpose"`
 		}
 		if err := c.BodyParser(&body); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+			return JSONErrorAlways200(c, "invalid body", 2001, nil)
 		}
 
 		// Validate inputs
 		email := strings.TrimSpace(body.Email)
 		code := strings.TrimSpace(body.Code)
 		if email == "" || code == "" {
-			return fiber.NewError(fiber.StatusBadRequest, "email and code are required")
+			return JSONErrorAlways200(c, "email and code are required", 2002, nil)
 		}
 
 		// Validate purpose
 		purpose := models.OTPPurpose(body.Purpose)
 		if !purpose.IsValid() {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid purpose")
+			return JSONErrorAlways200(c, "invalid purpose", 2003, nil)
 		}
 
 		// Verify OTP
 		otpDoc, err := otpService.VerifyOTP(c.Context(), email, code, body.RequestID, purpose)
 		if err != nil {
 			log.Error("OTP verification failed", zap.Error(err), zap.String("email", email))
-			return fiber.NewError(fiber.StatusUnauthorized, "invalid or expired code")
+			return JSONErrorAlways200(c, "invalid or expired code", 2004, nil)
 		}
 
 		// For login purpose, create JWT tokens
@@ -334,7 +334,7 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			user, err := svc.FindUserByEmail(c.Context(), email)
 			if err != nil {
 				log.Error("User not found after OTP verification", zap.Error(err), zap.String("email", email))
-				return fiber.NewError(fiber.StatusUnauthorized, "user not found")
+				return JSONErrorAlways200(c, "user not found", 2005, nil)
 			}
 
 			// Create tokens
@@ -359,19 +359,19 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			Purpose string `json:"purpose"`
 		}
 		if err := c.BodyParser(&body); err != nil {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
+			return JSONErrorAlways200(c, "invalid body", 6001, nil)
 		}
 
 		// Validate email
 		email := strings.TrimSpace(body.Email)
 		if email == "" {
-			return fiber.NewError(fiber.StatusBadRequest, "email is required")
+			return JSONErrorAlways200(c, "email is required", 6002, nil)
 		}
 
 		// Validate purpose
 		purpose := models.OTPPurpose(body.Purpose)
 		if !purpose.IsValid() {
-			return fiber.NewError(fiber.StatusBadRequest, "invalid purpose")
+			return JSONErrorAlways200(c, "invalid purpose", 6003, nil)
 		}
 
 		// Resend OTP

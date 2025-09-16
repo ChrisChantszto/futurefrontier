@@ -71,3 +71,40 @@ func JSONErrorWithExtra(c *fiber.Ctx, status int, message string, errorCode int,
 	}
 	return c.Status(status).JSON(resp)
 }
+
+// JSONErrorAlways200 returns an error response with HTTP 200 status code but success:false
+// This is for API clients that expect all responses to have HTTP 200 status
+func JSONErrorAlways200(c *fiber.Ctx, message string, errorCode int, data any) error {
+	if message == "" {
+		message = "error"
+	}
+	resp := fiber.Map{
+		"success": false,
+		"message": message,
+		"data":    data,
+	}
+	if errorCode != 0 {
+		resp["error_code"] = errorCode
+	}
+	return c.Status(fiber.StatusOK).JSON(resp)
+}
+
+// JSONErrorAlways200WithExtra returns an error response with HTTP 200 status code but success:false
+// and allows extra top-level fields
+func JSONErrorAlways200WithExtra(c *fiber.Ctx, message string, errorCode int, data any, extra fiber.Map) error {
+	if message == "" {
+		message = "error"
+	}
+	resp := fiber.Map{
+		"success": false,
+		"message": message,
+		"data":    data,
+	}
+	if errorCode != 0 {
+		resp["error_code"] = errorCode
+	}
+	for k, v := range extra {
+		resp[k] = v
+	}
+	return c.Status(fiber.StatusOK).JSON(resp)
+}
