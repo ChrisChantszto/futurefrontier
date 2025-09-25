@@ -6,19 +6,19 @@ import (
 )
 
 type Config struct {
-	Port              string
-	MongoURI          string
-	DBName            string
-	JWTSecret         string
-	JWTRefreshSecret  string
-	CookieDomain      string
-	SecureCookies     bool
+	Port             string
+	MongoURI         string
+	DBName           string
+	JWTSecret        string
+	JWTRefreshSecret string
+	CookieDomain     string
+	SecureCookies    bool
 
 	SuperAdminEmail    string
 	SuperAdminPassword string
 
-	PageLimit    int
-	UserLimit    int
+	PageLimit     int
+	UserLimit     int
 	LanguageLimit int
 
 	AllowCustomSMTP bool
@@ -26,10 +26,10 @@ type Config struct {
 	CustomSMTP      SMTPConfig
 
 	// OTP Configuration
-	AppHMACSecret           string
-	OTPTTLMinutes          int
-	OTPMaxAttempts         int
-	OTPResendCooldownSecs  int
+	AppHMACSecret         string
+	OTPTTLMinutes         int
+	OTPMaxAttempts        int
+	OTPResendCooldownSecs int
 
 	// Logging Configuration
 	Logging LoggingConfig
@@ -48,18 +48,18 @@ type SMTPConfig struct {
 }
 
 type LoggingConfig struct {
-	ProjectID           string
-	ElasticsearchURL    string
-	ElasticsearchUser   string
-	ElasticsearchPass   string
-	EnableRequestBody   bool
-	EnableResponseBody  bool
-	EnableHeaders       bool
-	MaxBodySize         int64
+	ProjectID          string
+	ElasticsearchURL   string
+	ElasticsearchUser  string
+	ElasticsearchPass  string
+	EnableRequestBody  bool
+	EnableResponseBody bool
+	EnableHeaders      bool
+	MaxBodySize        int64
 	QueueSize          int
 	WorkerCount        int
 	RetryAttempts      int
-	RetryInterval      int // seconds
+	RetryInterval      int  // seconds
 	LocalMode          bool // for development - logs to file instead of ES
 }
 
@@ -92,20 +92,20 @@ func atoi(s string, def int) int {
 
 func Load() Config {
 	return Config{
-		Port:              getenv("PORT", "8080"),
-		MongoURI:          getenv("MONGODB_URI", "mongodb://localhost:27017"),
-		DBName:            getenv("DB_NAME", "onetake"),
-		JWTSecret:         getenv("JWT_SECRET", "dev-secret"),
-		JWTRefreshSecret:  getenv("JWT_REFRESH_SECRET", "dev-refresh-secret"),
-		CookieDomain:      getenv("COOKIE_DOMAIN", ""),
-		SecureCookies:     getbool("SECURE_COOKIES", false),
-		SuperAdminEmail:   getenv("SUPERADMIN_EMAIL", ""),
+		Port:               getenv("PORT", "8080"),
+		MongoURI:           getenv("MONGODB_URI", "mongodb://localhost:27017"),
+		DBName:             getenv("DB_NAME", "onetake"),
+		JWTSecret:          getenv("JWT_SECRET", "dev-secret"),
+		JWTRefreshSecret:   getenv("JWT_REFRESH_SECRET", "dev-refresh-secret"),
+		CookieDomain:       getenv("COOKIE_DOMAIN", ""),
+		SecureCookies:      getbool("SECURE_COOKIES", false),
+		SuperAdminEmail:    getenv("SUPERADMIN_EMAIL", ""),
 		SuperAdminPassword: getenv("SUPERADMIN_PASSWORD", ""),
 		PageLimit:          atoi(getenv("PAGE_LIMIT", "100"), 100),
 		UserLimit:          atoi(getenv("USER_LIMIT", "100"), 100),
 		LanguageLimit:      atoi(getenv("LANGUAGE_LIMIT", "3"), 3),
 		AllowCustomSMTP:    getbool("ALLOW_CUSTOM_SMTP", false),
-		
+
 		// Custom SMTP (user-configured)
 		CustomSMTP: SMTPConfig{
 			Host:      getenv("SMTP_HOST", ""),
@@ -118,7 +118,7 @@ func Load() Config {
 			BCC:       getenv("SMTP_BCC", ""),
 			UseTLS:    true,
 		},
-		
+
 		// Company SMTP (fallback)
 		CompanySMTP: SMTPConfig{
 			Host:      getenv("ONETAKE_SMTP_HOST", "smtpdm-ap-southeast-1.aliyun.com"),
@@ -131,23 +131,23 @@ func Load() Config {
 			BCC:       getenv("ONETAKE_SMTP_BCC", "tim.ho@onetakesolutions.com.hk"),
 			UseTLS:    getbool("ONETAKE_SMTP_TLS", true),
 		},
-		
+
 		// OTP Configuration
-		AppHMACSecret:          getenv("APP_HMAC_SECRET", ""),
-		OTPTTLMinutes:         atoi(getenv("OTP_TTL_MINUTES", "10"), 10),
+		AppHMACSecret:         getenv("APP_HMAC_SECRET", ""),
+		OTPTTLMinutes:         atoi(getenv("OTP_TTL_MINUTES", "20"), 20),
 		OTPMaxAttempts:        atoi(getenv("OTP_MAX_ATTEMPTS", "5"), 5),
 		OTPResendCooldownSecs: atoi(getenv("OTP_RESEND_COOLDOWN_SECONDS", "60"), 60),
 
 		// Logging Configuration
 		Logging: LoggingConfig{
-			ProjectID:           getenv("LOG_PROJECT_ID", "onetake-corpsite-backend"),
-			ElasticsearchURL:    getenv("ELASTICSEARCH_URL", "http://localhost:9200"),
-			ElasticsearchUser:   getenv("ELASTICSEARCH_USER", ""),
-			ElasticsearchPass:   getenv("ELASTICSEARCH_PASS", ""),
-			EnableRequestBody:   getbool("LOG_ENABLE_REQUEST_BODY", false),
-			EnableResponseBody:  getbool("LOG_ENABLE_RESPONSE_BODY", false),
-			EnableHeaders:       getbool("LOG_ENABLE_HEADERS", false),
-			MaxBodySize:         int64(atoi(getenv("LOG_MAX_BODY_SIZE", "1024"), 1024)),
+			ProjectID:          getenv("LOG_PROJECT_ID", "onetake-corpsite-backend"),
+			ElasticsearchURL:   getenv("ELASTICSEARCH_URL", "http://localhost:9200"),
+			ElasticsearchUser:  getenv("ELASTICSEARCH_USER", ""),
+			ElasticsearchPass:  getenv("ELASTICSEARCH_PASS", ""),
+			EnableRequestBody:  getbool("LOG_ENABLE_REQUEST_BODY", false),
+			EnableResponseBody: getbool("LOG_ENABLE_RESPONSE_BODY", false),
+			EnableHeaders:      getbool("LOG_ENABLE_HEADERS", false),
+			MaxBodySize:        int64(atoi(getenv("LOG_MAX_BODY_SIZE", "1024"), 1024)),
 			QueueSize:          atoi(getenv("LOG_QUEUE_SIZE", "1000"), 1000),
 			WorkerCount:        atoi(getenv("LOG_WORKER_COUNT", "3"), 3),
 			RetryAttempts:      atoi(getenv("LOG_RETRY_ATTEMPTS", "3"), 3),
