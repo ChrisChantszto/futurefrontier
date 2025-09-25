@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>您的驗證碼</title>
+</head>
+<body>
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h2>您的驗證碼</h2>
+        <p>請使用以下驗證碼驗證您的帳戶：</p>
+        <div style="background-color: #f4f4f4; padding: 15px; text-align: center; font-size: 24px; letter-spacing: 5px; font-weight: bold;">
+            {{.OTP}}
+        </div>
+        <p>此驗證碼將在 {{.TTLMinutes}} 分鐘後過期。</p>
+        <p>如果您沒有請求此驗證碼，請忽略此電子郵件。</p>
+        <p>謝謝，<br>您的服務團隊</p>
+    </div>
+</body>
+</html>

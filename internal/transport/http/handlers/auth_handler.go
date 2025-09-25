@@ -148,6 +148,7 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 		var body struct {
 			Email   string `json:"email"`
 			Purpose string `json:"purpose"`
+			Locale  string `json:"locale"`
 		}
 		if err := c.BodyParser(&body); err != nil {
 			return JSONErrorAlways200(c, "invalid body", 7001, nil)
@@ -163,7 +164,14 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 		if !purpose.IsValid() {
 			return JSONErrorAlways200(c, "invalid purpose", 7003, nil)
 		}
-		requestID, err := otpService.RequestOTP(c.Context(), email, purpose)
+
+		// Get locale from request body or Accept-Language header
+		locale := strings.TrimSpace(body.Locale)
+		if locale == "" {
+			locale = c.Get("Accept-Language")
+		}
+
+		requestID, err := otpService.RequestOTP(c.Context(), email, purpose, locale)
 		if err != nil {
 			log.Error("TOTP request failed", zap.Error(err), zap.String("email", email))
 			return JSONSuccessWithExtra(c, "If an account exists, we've sent a code to your email", nil, nil)
@@ -206,7 +214,10 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 	// Forgot password via TOTP: request and verify
 	// POST /auth/forgot-password/request-totp
 	group.Post("/forgot-password/request-totp", func(c *fiber.Ctx) error {
-		var body struct{ Email string `json:"email"` }
+		var body struct{ 
+			Email  string `json:"email"`
+			Locale string `json:"locale"` 
+		}
 		if err := c.BodyParser(&body); err != nil {
 			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
 		}
@@ -214,7 +225,14 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 		if email == "" {
 			return fiber.NewError(fiber.StatusBadRequest, "email is required")
 		}
-		requestID, err := otpService.RequestOTP(c.Context(), email, models.OTPPurposeForgetPassword)
+
+		// Get locale from request body or Accept-Language header
+		locale := strings.TrimSpace(body.Locale)
+		if locale == "" {
+			locale = c.Get("Accept-Language")
+		}
+
+		requestID, err := otpService.RequestOTP(c.Context(), email, models.OTPPurposeForgetPassword, locale)
 		if err != nil {
 			log.Error("Forgot-password TOTP request failed", zap.Error(err), zap.String("email", email))
 			return JSONSuccessWithExtra(c, "If an account exists, we've sent a code to your email", nil, nil)
@@ -267,6 +285,7 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 		var body struct {
 			Email   string `json:"email"`
 			Purpose string `json:"purpose"`
+			Locale  string `json:"locale"`
 		}
 		if err := c.BodyParser(&body); err != nil {
 			return fiber.NewError(fiber.StatusBadRequest, "invalid body")
@@ -284,8 +303,14 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			return fiber.NewError(fiber.StatusBadRequest, "invalid purpose")
 		}
 
+		// Get locale from request body or Accept-Language header
+		locale := strings.TrimSpace(body.Locale)
+		if locale == "" {
+			locale = c.Get("Accept-Language")
+		}
+
 		// Request OTP
-		requestID, err := otpService.RequestOTP(c.Context(), email, purpose)
+		requestID, err := otpService.RequestOTP(c.Context(), email, purpose, locale)
 		if err != nil {
 			log.Error("OTP request failed", zap.Error(err), zap.String("email", email))
 			// Return generic message to avoid enumeration
@@ -303,6 +328,7 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			Code      string `json:"code"`
 			RequestID string `json:"requestId,omitempty"`
 			Purpose   string `json:"purpose"`
+			Locale    string `json:"locale"`
 		}
 		if err := c.BodyParser(&body); err != nil {
 			return JSONErrorAlways200(c, "invalid body", 2001, nil)
@@ -357,6 +383,7 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 		var body struct {
 			Email   string `json:"email"`
 			Purpose string `json:"purpose"`
+			Locale  string `json:"locale"`
 		}
 		if err := c.BodyParser(&body); err != nil {
 			return JSONErrorAlways200(c, "invalid body", 6001, nil)
@@ -374,8 +401,14 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 			return JSONErrorAlways200(c, "invalid purpose", 6003, nil)
 		}
 
+		// Get locale from request body or Accept-Language header
+		locale := strings.TrimSpace(body.Locale)
+		if locale == "" {
+			locale = c.Get("Accept-Language")
+		}
+
 		// Resend OTP
-		requestID, err := otpService.ResendOTP(c.Context(), email, purpose)
+		requestID, err := otpService.ResendOTP(c.Context(), email, purpose, locale)
 		if err != nil {
 			log.Error("OTP resend failed", zap.Error(err), zap.String("email", email))
 			// Return generic message to avoid enumeration

@@ -86,7 +86,7 @@ func (s *OTPService) normalizeEmail(email string) string {
 }
 
 // RequestOTP handles OTP request logic
-func (s *OTPService) RequestOTP(ctx context.Context, email string, purpose models.OTPPurpose) (string, error) {
+func (s *OTPService) RequestOTP(ctx context.Context, email string, purpose models.OTPPurpose, locale string) (string, error) {
 	email = s.normalizeEmail(email)
 	
 	if !purpose.IsValid() {
@@ -136,8 +136,8 @@ func (s *OTPService) RequestOTP(ctx context.Context, email string, purpose model
 	// Optionally mark previous active OTPs as consumed
 	s.consumePreviousOTPs(ctx, email, purpose, requestID)
 	
-	// Send email
-	if err := s.smtpService.SendOTPEmail(email, code); err != nil {
+	// Send email with locale
+	if err := s.smtpService.SendOTPEmail(email, code, locale); err != nil {
 		return "", fmt.Errorf("failed to send OTP email: %w", err)
 	}
 	
@@ -290,7 +290,7 @@ func (s *OTPService) consumeOTP(ctx context.Context, otpID string) error {
 }
 
 // ResendOTP handles OTP resend by creating a new OTP and consuming the old one
-func (s *OTPService) ResendOTP(ctx context.Context, email string, purpose models.OTPPurpose) (string, error) {
+func (s *OTPService) ResendOTP(ctx context.Context, email string, purpose models.OTPPurpose, locale string) (string, error) {
 	// This is essentially the same as RequestOTP, but we explicitly consume previous OTPs first
-	return s.RequestOTP(ctx, email, purpose)
+	return s.RequestOTP(ctx, email, purpose, locale)
 }

@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 type Config struct {
@@ -30,6 +31,9 @@ type Config struct {
 	OTPTTLMinutes         int
 	OTPMaxAttempts        int
 	OTPResendCooldownSecs int
+
+	// i18n Configuration
+	I18n I18nConfig
 
 	// Logging Configuration
 	Logging LoggingConfig
@@ -61,6 +65,12 @@ type LoggingConfig struct {
 	RetryAttempts      int
 	RetryInterval      int  // seconds
 	LocalMode          bool // for development - logs to file instead of ES
+}
+
+type I18nConfig struct {
+	DefaultLocale    string   // Default locale if none is specified
+	SupportedLocales []string // List of supported locales
+	TemplatesDir     string   // Directory where email templates are stored
 }
 
 func getenv(key, def string) string {
@@ -137,6 +147,13 @@ func Load() Config {
 		OTPTTLMinutes:         atoi(getenv("OTP_TTL_MINUTES", "20"), 20),
 		OTPMaxAttempts:        atoi(getenv("OTP_MAX_ATTEMPTS", "5"), 5),
 		OTPResendCooldownSecs: atoi(getenv("OTP_RESEND_COOLDOWN_SECONDS", "60"), 60),
+
+		// i18n Configuration
+		I18n: I18nConfig{
+			DefaultLocale:    getenv("I18N_DEFAULT_LOCALE", "en"),
+			SupportedLocales: strings.Split(getenv("I18N_SUPPORTED_LOCALES", "en,zh-hans,zh-hant"), ","),
+			TemplatesDir:     getenv("I18N_TEMPLATES_DIR", "./templates"),
+		},
 
 		// Logging Configuration
 		Logging: LoggingConfig{
