@@ -13,6 +13,7 @@ import (
 	"github.com/onetakesolutions/onetake-corpsite-backend/internal/config"
 	"github.com/onetakesolutions/onetake-corpsite-backend/internal/models"
 	"github.com/onetakesolutions/onetake-corpsite-backend/internal/service"
+	"github.com/onetakesolutions/onetake-corpsite-backend/internal/utils"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -168,7 +169,9 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 		// Get locale from request body or Accept-Language header
 		locale := strings.TrimSpace(body.Locale)
 		if locale == "" {
-			locale = c.Get("Accept-Language")
+			locale = utils.GetRequestLocaleFromRawHeaders(c.Get("X-Locale"), c.Get("Accept-Language"))
+		} else {
+			locale = utils.NormalizeLocale(locale)
 		}
 
 		requestID, err := otpService.RequestOTP(c.Context(), email, purpose, locale)
@@ -229,7 +232,9 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 		// Get locale from request body or Accept-Language header
 		locale := strings.TrimSpace(body.Locale)
 		if locale == "" {
-			locale = c.Get("Accept-Language")
+			locale = utils.GetRequestLocaleFromRawHeaders(c.Get("X-Locale"), c.Get("Accept-Language"))
+		} else {
+			locale = utils.NormalizeLocale(locale)
 		}
 
 		requestID, err := otpService.RequestOTP(c.Context(), email, models.OTPPurposeForgetPassword, locale)
@@ -306,7 +311,9 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 		// Get locale from request body or Accept-Language header
 		locale := strings.TrimSpace(body.Locale)
 		if locale == "" {
-			locale = c.Get("Accept-Language")
+			locale = utils.GetRequestLocaleFromRawHeaders(c.Get("X-Locale"), c.Get("Accept-Language"))
+		} else {
+			locale = utils.NormalizeLocale(locale)
 		}
 
 		// Request OTP
@@ -404,7 +411,9 @@ func RegisterAuth(r fiber.Router, db *mongo.Database, cfg config.Config, log *za
 		// Get locale from request body or Accept-Language header
 		locale := strings.TrimSpace(body.Locale)
 		if locale == "" {
-			locale = c.Get("Accept-Language")
+			locale = utils.GetRequestLocaleFromRawHeaders(c.Get("X-Locale"), c.Get("Accept-Language"))
+		} else {
+			locale = utils.NormalizeLocale(locale)
 		}
 
 		// Resend OTP
@@ -470,3 +479,4 @@ func hashPassword(p string) string {
 	hash, _ := bcrypt.GenerateFromPassword([]byte(p), bcrypt.DefaultCost)
 	return string(hash)
 }
+

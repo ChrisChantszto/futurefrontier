@@ -21,6 +21,7 @@ type APILogEntry struct {
 	ClientPort     string             `json:"client_port" bson:"client_port"`
 	UserAgent      string             `json:"user_agent" bson:"user_agent"`
 	Referer        string             `json:"referer" bson:"referer"`
+	Locale         string             `json:"locale,omitempty" bson:"locale,omitempty"`
 	QueryParams    map[string]string  `json:"query_params" bson:"query_params"`
 	Headers        map[string]string  `json:"headers,omitempty" bson:"headers,omitempty"`
 	RequestBody    string             `json:"request_body,omitempty" bson:"request_body,omitempty"`
@@ -50,6 +51,7 @@ type ErrorLogEntry struct {
 	StackTrace     string             `json:"stack_trace,omitempty" bson:"stack_trace,omitempty"`
 	ClientIP       string             `json:"client_ip" bson:"client_ip"`
 	UserAgent      string             `json:"user_agent" bson:"user_agent"`
+	Locale         string             `json:"locale,omitempty" bson:"locale,omitempty"`
 	RequestBody    string             `json:"request_body,omitempty" bson:"request_body,omitempty"`
 	
 	// Metadata for backup system

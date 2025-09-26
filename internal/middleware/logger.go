@@ -11,6 +11,7 @@ import (
 
 	"github.com/onetakesolutions/onetake-corpsite-backend/internal/models"
 	"github.com/onetakesolutions/onetake-corpsite-backend/internal/service"
+	"github.com/onetakesolutions/onetake-corpsite-backend/internal/utils"
 )
 
 // LoggerMiddleware creates a new logging middleware
@@ -88,6 +89,9 @@ func LoggerMiddleware(loggerService *service.LoggerService, config models.LogCon
 			})
 		}
 
+		// Resolve normalized locale from headers
+		locale := utils.GetRequestLocaleFromRawHeaders(c.Get("X-Locale"), c.Get("Accept-Language"))
+
 		// Get route name/pattern
 		route := c.Route().Path
 		if route == "" {
@@ -108,6 +112,7 @@ func LoggerMiddleware(loggerService *service.LoggerService, config models.LogCon
 			ClientPort:    clientPort,
 			UserAgent:     c.Get("User-Agent"),
 			Referer:       c.Get("Referer"),
+			Locale:        locale,
 			QueryParams:   queryParams,
 			Headers:       headers,
 			RequestBody:   requestBody,
@@ -133,6 +138,7 @@ func LoggerMiddleware(loggerService *service.LoggerService, config models.LogCon
 					ErrorType:    "server_error",
 					ClientIP:     clientIP,
 					UserAgent:    c.Get("User-Agent"),
+					Locale:       locale,
 					RequestBody:  requestBody,
 				}
 
