@@ -65,9 +65,51 @@ func CreateOTPIndexes(ctx context.Context, db *mongo.Database, logger *zap.Logge
 	return nil
 }
 
+// CreateLocaleIndexes creates the necessary indexes for the locales collection
+func CreateLocaleIndexes(ctx context.Context, db *mongo.Database, logger *zap.Logger) error {
+	collection := db.Collection("locales")
+	
+	indexes := []mongo.IndexModel{
+		// Index for sortOrder (for ordering locales)
+		{
+			Keys: bson.D{
+				{Key: "sortOrder", Value: 1},
+				{Key: "code", Value: 1},
+			},
+			Options: options.Index().SetName("sortOrder_code"),
+		},
+		// Index for isEnabled (for filtering enabled locales)
+		{
+			Keys: bson.D{{Key: "isEnabled", Value: 1}},
+			Options: options.Index().SetName("isEnabled"),
+		},
+		// Index for isDefault (for finding default locale)
+		{
+			Keys: bson.D{{Key: "isDefault", Value: 1}},
+			Options: options.Index().SetName("isDefault"),
+		},
+	}
+	
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	
+	_, err := collection.Indexes().CreateMany(ctx, indexes)
+	if err != nil {
+		logger.Error("Failed to create locale indexes", zap.Error(err))
+		return err
+	}
+	
+	logger.Info("Locale collection indexes created successfully")
+	return nil
+}
+
 // InitializeDatabase sets up all necessary database indexes
 func InitializeDatabase(ctx context.Context, db *mongo.Database, logger *zap.Logger) error {
 	if err := CreateOTPIndexes(ctx, db, logger); err != nil {
+		return err
+	}
+	
+	if err := CreateLocaleIndexes(ctx, db, logger); err != nil {
 		return err
 	}
 	

@@ -16,6 +16,7 @@ func SetupRoutes(app *fiber.App, db *mongo.Database, cfg config.Config, log *zap
 	// Public routes
 	handlers.RegisterAuth(api, db, cfg, log)
 	handlers.RegisterSettingsPublic(api, db, cfg, log)
+	handlers.RegisterLocalesPublic(api, db, cfg, log)
 	// Public pages (read-only)
 	handlers.RegisterPagesPublic(api, db, cfg, log)
 
@@ -26,5 +27,6 @@ func SetupRoutes(app *fiber.App, db *mongo.Database, cfg config.Config, log *zap
 	// Protected routes
 	protected := api.Group("", middleware.RequireAuth(cfg))
 	handlers.RegisterSettingsProtected(protected, db, cfg, log)
+	handlers.RegisterLocalesProtected(protected, db, cfg, log)
 	handlers.RegisterPagesProtected(protected, db, cfg, log)
 }

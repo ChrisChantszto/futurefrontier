@@ -1,0 +1,94 @@
+### Locale Management API Examples
+### Use with REST Client extension in VS Code or similar tools
+
+@baseUrl = http://localhost:8080/api
+@token = YOUR_AUTH_TOKEN_HERE
+
+### 1. Get all locales (public)
+GET {{baseUrl}}/locales
+Content-Type: application/json
+
+### 2. Get only enabled locales (public)
+GET {{baseUrl}}/locales?enabled=true
+Content-Type: application/json
+
+### 3. Get locale config for frontend (public)
+GET {{baseUrl}}/locales/config
+Content-Type: application/json
+
+### 4. Get single locale (public)
+GET {{baseUrl}}/locales/en
+Content-Type: application/json
+
+### 5. Create new locale - German (protected)
+POST {{baseUrl}}/locales
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "code": "de",
+  "name": "German",
+  "nativeName": "Deutsch",
+  "isEnabled": true,
+  "sortOrder": 4
+}
+
+### 6. Create new locale - French (protected)
+POST {{baseUrl}}/locales
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "code": "fr",
+  "name": "French",
+  "nativeName": "Français",
+  "isEnabled": true,
+  "sortOrder": 5
+}
+
+### 7. Create new locale - Japanese (protected)
+POST {{baseUrl}}/locales
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "code": "ja",
+  "name": "Japanese",
+  "nativeName": "日本語",
+  "isEnabled": false,
+  "sortOrder": 6
+}
+
+### 8. Update locale (protected)
+PATCH {{baseUrl}}/locales/de
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "German (Updated)",
+  "isEnabled": true,
+  "sortOrder": 10
+}
+
+### 9. Enable/Disable locale (protected)
+PATCH {{baseUrl}}/locales/ja
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "isEnabled": true
+}
+
+### 10. Set locale as default (protected)
+POST {{baseUrl}}/locales/en/set-default
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 11. Delete locale (protected)
+DELETE {{baseUrl}}/locales/ja
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+### 12. Health check
+GET {{baseUrl}}/healthz
+Content-Type: application/json
