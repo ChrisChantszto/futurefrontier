@@ -101,7 +101,7 @@ func RegisterLocalesProtected(r fiber.Router, db *mongo.Database, cfg config.Con
 
 		log.Info("Locale created", zap.String("code", locale.Code), zap.String("name", locale.Name))
 
-		return c.Status(fiber.StatusCreated).JSON(fiber.Map{
+		return c.Status(fiber.StatusOK).JSON(fiber.Map{
 			"success": true,
 			"data":    locale,
 			"message": "Locale created successfully",

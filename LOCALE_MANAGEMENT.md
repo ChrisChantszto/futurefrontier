@@ -2,6 +2,25 @@
 
 This backend provides a complete locale management system that integrates with your Next.js i18n frontend.
 
+## Quick Reference
+
+**Locale ID = Locale Code**
+- When you create a locale with `code: "de"`, the ID is automatically `"de"`
+- Use this ID in all operations: `GET /api/locales/de`, `PATCH /api/locales/de`, etc.
+- To get all IDs, call `GET /api/locales` and check the `id` or `code` field
+
+**Common Operations:**
+```bash
+# List all locales and their IDs
+GET /api/locales
+
+# Create locale (returns ID in response)
+POST /api/locales { "code": "de", ... }
+
+# Update using the ID
+PATCH /api/locales/de { "isEnabled": false }
+```
+
 ## Features
 
 - **Dynamic Locale Management**: Add, update, enable/disable, and delete locales from the backend
@@ -119,7 +138,7 @@ POST /api/locales
 }
 ```
 
-**Response:**
+**Response (200 OK):**
 ```json
 {
   "success": true,
@@ -137,6 +156,8 @@ POST /api/locales
   "message": "Locale created successfully"
 }
 ```
+
+**Note:** The `id` field is automatically set to the same value as `code`. Use this ID for subsequent operations (GET, PATCH, DELETE).
 
 #### 5. Update Locale
 ```http
@@ -308,7 +329,24 @@ curl -X POST http://localhost:8080/api/locales \
   }'
 ```
 
+**Response will include the ID:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "de",  // ← This is your locale ID (same as code)
+    "code": "de",
+    ...
+  }
+}
+```
+
 2. **The locale is now available!** The frontend will automatically pick it up from `/api/locales/config`.
+
+3. **Use the ID for updates:** The `id` field (which equals the `code`) is used in all subsequent operations:
+   - `GET /api/locales/de`
+   - `PATCH /api/locales/de`
+   - `DELETE /api/locales/de`
 
 ### Frontend Steps:
 
