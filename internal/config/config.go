@@ -14,6 +14,7 @@ type Config struct {
 	JWTRefreshSecret string
 	CookieDomain     string
 	SecureCookies    bool
+	CORSOrigins      string
 
 	SuperAdminEmail    string
 	SuperAdminPassword string
@@ -37,6 +38,9 @@ type Config struct {
 
 	// Logging Configuration
 	Logging LoggingConfig
+
+	// Google Cloud Configuration
+	GoogleCloud GoogleCloudConfig
 }
 
 type SMTPConfig struct {
@@ -73,6 +77,18 @@ type I18nConfig struct {
 	TemplatesDir     string   // Directory where email templates are stored
 }
 
+type GoogleCloudConfig struct {
+	ProjectID              string // GCP Project ID
+	Location               string // Vertex AI location (e.g., us-central1, asia-southeast1)
+	CredentialsPath        string // Path to service account JSON key file
+	VertexAIModel          string // Model name (e.g., gemini-1.5-pro, gemini-1.5-flash)
+	VertexAIEndpoint       string // Optional custom endpoint
+	MaxTokens              int    // Max tokens for generation
+	Temperature            float64 // Temperature for generation (0.0-1.0)
+	TopP                   float64 // Top-p for generation
+	TopK                   int    // Top-k for generation
+}
+
 func getenv(key, def string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
@@ -100,6 +116,15 @@ func atoi(s string, def int) int {
 	return n
 }
 
+func atof(s string, def float64) float64 {
+	var n float64
+	_, err := fmt.Sscanf(s, "%f", &n)
+	if err != nil {
+		return def
+	}
+	return n
+}
+
 func Load() Config {
 	return Config{
 		Port:               getenv("PORT", "8080"),
@@ -109,6 +134,7 @@ func Load() Config {
 		JWTRefreshSecret:   getenv("JWT_REFRESH_SECRET", "dev-refresh-secret"),
 		CookieDomain:       getenv("COOKIE_DOMAIN", ""),
 		SecureCookies:      getbool("SECURE_COOKIES", false),
+		CORSOrigins:        getenv("CORS_ORIGINS", "http://localhost:3000,http://localhost:5173"),
 		SuperAdminEmail:    getenv("SUPERADMIN_EMAIL", ""),
 		SuperAdminPassword: getenv("SUPERADMIN_PASSWORD", ""),
 		PageLimit:          atoi(getenv("PAGE_LIMIT", "100"), 100),
@@ -170,6 +196,19 @@ func Load() Config {
 			RetryAttempts:      atoi(getenv("LOG_RETRY_ATTEMPTS", "3"), 3),
 			RetryInterval:      atoi(getenv("LOG_RETRY_INTERVAL", "30"), 30),
 			LocalMode:          getbool("LOG_LOCAL_MODE", true), // Default to local for development
+		},
+
+		// Google Cloud Configuration
+		GoogleCloud: GoogleCloudConfig{
+			ProjectID:        getenv("GCP_PROJECT_ID", ""),
+			Location:         getenv("GCP_LOCATION", "us-central1"),
+			CredentialsPath:  getenv("GOOGLE_APPLICATION_CREDENTIALS", ""),
+			VertexAIModel:    getenv("VERTEX_AI_MODEL", "gemini-1.5-flash"),
+			VertexAIEndpoint: getenv("VERTEX_AI_ENDPOINT", ""),
+			MaxTokens:        atoi(getenv("VERTEX_AI_MAX_TOKENS", "8192"), 8192),
+			Temperature:      atof(getenv("VERTEX_AI_TEMPERATURE", "0.7"), 0.7),
+			TopP:             atof(getenv("VERTEX_AI_TOP_P", "0.95"), 0.95),
+			TopK:             atoi(getenv("VERTEX_AI_TOP_K", "40"), 40),
 		},
 	}
 }

@@ -7,10 +7,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/contrib/fiberzap"
-	"github.com/gofiber/fiber/v2/middleware/recover"
+	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
+	"github.com/gofiber/fiber/v2/middleware/recover"
 	"github.com/joho/godotenv"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
@@ -77,7 +77,7 @@ func main() {
 
 	// Fiber app
 	app := fiber.New(fiber.Config{
-		AppName:      "onetake-corpsite-backend",
+		AppName: "onetake-corpsite-backend",
 		ErrorHandler: middleware.ErrorHandlerMiddleware(loggerService, models.LogConfig{
 			ProjectID:         cfg.Logging.ProjectID,
 			EnableRequestBody: cfg.Logging.EnableRequestBody,
@@ -89,21 +89,23 @@ func main() {
 	app.Use(middleware.RequestIDMiddleware())
 	app.Use(recover.New())
 	app.Use(cors.New(cors.Config{
-		AllowOrigins:     "http://localhost:3000",
+		AllowOrigins:     cfg.CORSOrigins,
+		AllowMethods:     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
+		AllowHeaders:     "Content-Type, Authorization, X-Locale, Accept-Language, X-Request-ID",
 		AllowCredentials: true,
-		AllowHeaders:     "Content-Type, Authorization, X-Locale, Accept-Language",
-		ExposeHeaders:    "Set-Cookie",
+		ExposeHeaders:    "Set-Cookie, X-Request-ID",
+		MaxAge:           3600,
 	}))
-	
+
 	// Custom logging middleware
 	app.Use(middleware.LoggerMiddleware(loggerService, models.LogConfig{
-		ProjectID:         cfg.Logging.ProjectID,
-		EnableRequestBody: cfg.Logging.EnableRequestBody,
+		ProjectID:          cfg.Logging.ProjectID,
+		EnableRequestBody:  cfg.Logging.EnableRequestBody,
 		EnableResponseBody: cfg.Logging.EnableResponseBody,
-		EnableHeaders:     cfg.Logging.EnableHeaders,
-		MaxBodySize:       cfg.Logging.MaxBodySize,
-		SensitiveHeaders:  []string{"authorization", "cookie", "x-api-key"},
-		SensitivePaths:    []string{}, // Log all paths
+		EnableHeaders:      cfg.Logging.EnableHeaders,
+		MaxBodySize:        cfg.Logging.MaxBodySize,
+		SensitiveHeaders:   []string{"authorization", "cookie", "x-api-key"},
+		SensitivePaths:     []string{}, // Log all paths
 	}, zlogger))
 
 	// Keep fiberzap for development visibility

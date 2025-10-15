@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Vertex AI Tester</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-white p-8">
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-4xl font-bold mb-8 text-center bg-gradient-to-r from-blue-400 to-purple-600 bg-clip-text text-transparent">
+            🤖 Vertex AI Tester
+        </h1>
+
+        <!-- Login Section -->
+        <div id="loginSection" class="bg-gray-800 rounded-lg p-6 shadow-xl mb-6">
+            <h2 class="text-2xl font-bold mb-4">1. Login First</h2>
+            <input type="email" id="email" placeholder="Email" class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 mb-2">
+            <input type="password" id="password" placeholder="Password" class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 mb-4">
+            <button onclick="login()" class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg font-semibold w-full">
+                🔐 Login
+            </button>
+            <div id="loginStatus" class="mt-2 text-sm"></div>
+        </div>
+
+        <!-- Test Vertex AI Section -->
+        <div class="bg-gray-800 rounded-lg p-6 shadow-xl mb-6">
+            <h2 class="text-2xl font-bold mb-4">2. Test Vertex AI (No logs needed)</h2>
+            <p class="text-gray-400 mb-4">This tests if Vertex AI is working without needing Elasticsearch logs</p>
+            <input type="text" id="testPrompt" value="Hello, Vertex AI! Tell me you're working with a short joke." 
+                   class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 mb-4">
+            <button onclick="testVertexAI()" class="bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg font-semibold w-full">
+                ✅ Test Vertex AI Connection
+            </button>
+        </div>
+
+        <!-- Chat Section -->
+        <div class="bg-gray-800 rounded-lg p-6 shadow-xl mb-6">
+            <h2 class="text-2xl font-bold mb-4">3. Chat with Logs</h2>
+            <p class="text-gray-400 mb-4">Requires Elasticsearch logs</p>
+            <input type="text" id="chatMessage" placeholder="Ask a question about your logs..." 
+                   class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 mb-2">
+            <select id="timeRange" class="w-full bg-gray-700 border border-gray-600 rounded px-4 py-2 mb-4">
+                <option value="1h">Last 1 hour</option>
+                <option value="24h">Last 24 hours</option>
+                <option value="7d">Last 7 days</option>
+            </select>
+            <button onclick="chatWithLogs()" class="bg-purple-600 hover:bg-purple-700 text-white px-6 py-2 rounded-lg font-semibold w-full">
+                💬 Chat
+            </button>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="bg-gray-800 rounded-lg p-6 shadow-xl mb-6">
+            <h2 class="text-2xl font-bold mb-4">4. Quick Actions (Require logs)</h2>
+            <div class="grid grid-cols-3 gap-4">
+                <button onclick="analyzeLogs()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg font-semibold">
+                    📊 Analyze Logs
+                </button>
+                <button onclick="detectAnomalies()" class="bg-red-600 hover:bg-red-700 text-white px-4 py-3 rounded-lg font-semibold">
+                    🚨 Detect Anomalies
+                </button>
+                <button onclick="suggestOptimizations()" class="bg-yellow-600 hover:bg-yellow-700 text-white px-4 py-3 rounded-lg font-semibold">
+                    ⚡ Suggest Optimizations
+                </button>
+            </div>
+        </div>
+
+        <!-- Response Section -->
+        <div id="responseSection" class="bg-gray-800 rounded-lg p-6 shadow-xl hidden">
+            <h3 class="font-bold text-xl mb-4 text-blue-400">Response:</h3>
+            <div id="responseText" class="text-gray-300 whitespace-pre-wrap mb-4"></div>
+            <div id="metadata" class="text-sm text-gray-500"></div>
+        </div>
+
+        <!-- Status Section -->
+        <div class="bg-gray-800 rounded-lg p-4 mt-6">
+            <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-400">Status:</span>
+                <span id="status" class="text-sm">Not connected</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:8080/api';
+
+        function setStatus(message, isError = false) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = isError ? 'text-sm text-red-400' : 'text-sm text-green-400';
+        }
+
+        function showResponse(text, meta = '') {
+            const responseSection = document.getElementById('responseSection');
+            const responseText = document.getElementById('responseText');
+            const metadata = document.getElementById('metadata');
+            
+            responseText.textContent = text;
+            metadata.textContent = meta;
+            responseSection.classList.remove('hidden');
+            responseSection.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const loginStatus = document.getElementById('loginStatus');
+
+            if (!email || !password) {
+                loginStatus.textContent = '❌ Please enter email and password';
+                loginStatus.className = 'mt-2 text-sm text-red-400';
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    credentials: 'include',
+                    body: JSON.stringify({email, password})
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    loginStatus.textContent = '✅ Login successful!';
+                    loginStatus.className = 'mt-2 text-sm text-green-400';
+                    setStatus('Connected - Ready to test');
+                } else {
+                    loginStatus.textContent = '❌ Login failed: ' + (data.message || 'Unknown error');
+                    loginStatus.className = 'mt-2 text-sm text-red-400';
+                }
+            } catch (error) {
+                loginStatus.textContent = '❌ Error: ' + error.message;
+                loginStatus.className = 'mt-2 text-sm text-red-400';
+                setStatus('Connection error', true);
+            }
+        }
+
+        async function testVertexAI() {
+            const prompt = document.getElementById('testPrompt').value;
+            showResponse('🤔 Testing Vertex AI connection...', 'Please wait...');
+
+            try {
+                const response = await fetch(`${API_BASE}/ai/generate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({prompt})
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResponse(
+                        '✅ VERTEX AI IS WORKING!\n\n' + data.data.text,
+                        `Finish reason: ${data.data.finish_reason || 'N/A'}`
+                    );
+                    setStatus('✅ Vertex AI connected and working!');
+                } else {
+                    showResponse('❌ Error: ' + (data.message || 'Unknown error'), '');
+                    setStatus('Vertex AI error', true);
+                }
+            } catch (error) {
+                showResponse('❌ Error: ' + error.message, '');
+                setStatus('Request failed', true);
+            }
+        }
+
+        async function chatWithLogs() {
+            const message = document.getElementById('chatMessage').value;
+            const timeRange = document.getElementById('timeRange').value;
+
+            if (!message) {
+                alert('Please enter a message');
+                return;
+            }
+
+            showResponse('🤔 Analyzing logs with AI...', 'Please wait...');
+
+            try {
+                const response = await fetch(`${API_BASE}/ai/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({message, time_range: timeRange})
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResponse(
+                        data.data.response,
+                        `📊 Analyzed ${data.data.logs_count} logs from the last ${data.data.time_range}`
+                    );
+                } else {
+                    showResponse('❌ Error: ' + (data.message || 'Unknown error'), '');
+                }
+            } catch (error) {
+                showResponse('❌ Error: ' + error.message, '');
+            }
+        }
+
+        async function analyzeLogs() {
+            showResponse('🤔 Analyzing logs...', 'Please wait...');
+
+            try {
+                const response = await fetch(`${API_BASE}/ai/analyze-logs`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        query: 'Provide a comprehensive analysis of API usage patterns',
+                        time_range: '1h',
+                        limit: 50
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResponse(
+                        data.data.analysis.text,
+                        `📊 Analyzed ${data.data.logs_count} logs`
+                    );
+                } else {
+                    showResponse('❌ Error: ' + (data.message || 'Unknown error'), '');
+                }
+            } catch (error) {
+                showResponse('❌ Error: ' + error.message, '');
+            }
+        }
+
+        async function detectAnomalies() {
+            showResponse('🔍 Detecting anomalies...', 'Please wait...');
+
+            try {
+                const response = await fetch(`${API_BASE}/ai/detect-anomalies`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        time_range: '1h',
+                        limit: 100
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResponse(
+                        data.data.anomalies.text,
+                        `🚨 Analyzed ${data.data.logs_count} logs`
+                    );
+                } else {
+                    showResponse('❌ Error: ' + (data.message || 'Unknown error'), '');
+                }
+            } catch (error) {
+                showResponse('❌ Error: ' + error.message, '');
+            }
+        }
+
+        async function suggestOptimizations() {
+            showResponse('⚡ Generating optimization suggestions...', 'Please wait...');
+
+            try {
+                const response = await fetch(`${API_BASE}/ai/suggest-optimizations`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        time_range: '24h',
+                        limit: 200
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.success) {
+                    showResponse(
+                        data.data.suggestions.text,
+                        `⚡ Analyzed ${data.data.logs_count} logs`
+                    );
+                } else {
+                    showResponse('❌ Error: ' + (data.message || 'Unknown error'), '');
+                }
+            } catch (error) {
+                showResponse('❌ Error: ' + error.message, '');
+            }
+        }
+    </script>
+</body>
+</html>

@@ -271,6 +271,127 @@ func (es *ElasticsearchService) writeToLocalFile(logType string, logEntry interf
 	return nil
 }
 
+// SearchLogs searches for logs in Elasticsearch based on time range
+func (es *ElasticsearchService) SearchLogs(ctx context.Context, timeRange string, limit int) ([]map[string]interface{}, error) {
+	if es.config.LocalMode || es.client == nil {
+		es.logger.Warn("Cannot search logs in local mode")
+		return []map[string]interface{}{}, nil
+	}
+
+	// Parse time range (e.g., "1h", "24h", "7d")
+	duration, err := parseTimeRange(timeRange)
+	if err != nil {
+		return nil, fmt.Errorf("invalid time range: %w", err)
+	}
+
+	fromTime := time.Now().Add(-duration)
+	
+	// Build search query
+	query := map[string]interface{}{
+		"query": map[string]interface{}{
+			"range": map[string]interface{}{
+				"timestamp": map[string]interface{}{
+					"gte": fromTime.Format(time.RFC3339),
+					"lte": time.Now().Format(time.RFC3339),
+				},
+			},
+		},
+		"sort": []map[string]interface{}{
+			{"timestamp": map[string]string{"order": "desc"}},
+		},
+		"size": limit,
+	}
+
+	queryJSON, err := json.Marshal(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal query: %w", err)
+	}
+
+	// Search across all API log indexes
+	indexPattern := "api-logs-*"
+	
+	req := esapi.SearchRequest{
+		Index: []string{indexPattern},
+		Body:  bytes.NewReader(queryJSON),
+	}
+
+	res, err := req.Do(ctx, es.client)
+	if err != nil {
+		return nil, fmt.Errorf("search request failed: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.IsError() {
+		return nil, fmt.Errorf("elasticsearch search error: %s", res.Status())
+	}
+
+	// Parse response
+	var result map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Extract hits
+	hits, ok := result["hits"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid response format")
+	}
+
+	hitsList, ok := hits["hits"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid hits format")
+	}
+
+	// Extract source documents
+	logs := make([]map[string]interface{}, 0, len(hitsList))
+	for _, hit := range hitsList {
+		hitMap, ok := hit.(map[string]interface{})
+		if !ok {
+			continue
+		}
+		
+		source, ok := hitMap["_source"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		
+		logs = append(logs, source)
+	}
+
+	es.logger.Info("Retrieved logs from Elasticsearch",
+		zap.Int("count", len(logs)),
+		zap.String("time_range", timeRange))
+
+	return logs, nil
+}
+
+// parseTimeRange parses time range strings like "1h", "24h", "7d" into duration
+func parseTimeRange(timeRange string) (time.Duration, error) {
+	if len(timeRange) < 2 {
+		return 0, fmt.Errorf("invalid time range format")
+	}
+
+	unit := timeRange[len(timeRange)-1:]
+	valueStr := timeRange[:len(timeRange)-1]
+	
+	var value int
+	_, err := fmt.Sscanf(valueStr, "%d", &value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid time range value: %w", err)
+	}
+
+	switch unit {
+	case "m":
+		return time.Duration(value) * time.Minute, nil
+	case "h":
+		return time.Duration(value) * time.Hour, nil
+	case "d":
+		return time.Duration(value) * 24 * time.Hour, nil
+	default:
+		return 0, fmt.Errorf("invalid time range unit: %s (use m, h, or d)", unit)
+	}
+}
+
 // IsHealthy checks if Elasticsearch is healthy
 func (es *ElasticsearchService) IsHealthy(ctx context.Context) bool {
 	if es.config.LocalMode || es.client == nil {
