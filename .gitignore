@@ -1,0 +1,5 @@
+# Exclude the .env file
+.env
+
+# Exclude the specific JSON file
+grand-principle-475206-b5-c127d3a24967.json

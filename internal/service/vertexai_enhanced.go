@@ -157,3 +157,151 @@ func (s *VertexAIService) AnalyzeFailuresByEndpoint(ctx context.Context, logs []
 		Prompt: promptBuilder.String(),
 	})
 }
+
+// ChatWithContext implements RAG (Retrieval-Augmented Generation) for context-aware chat
+func (s *VertexAIService) ChatWithContext(ctx context.Context, userMessage string, logs []map[string]interface{}) (*GenerateContentResponse, error) {
+	if len(logs) == 0 {
+		return nil, fmt.Errorf("no logs provided for context")
+	}
+
+	// Build context from logs
+	context := s.buildLogContext(logs)
+
+	prompt := fmt.Sprintf(`You are an AI assistant specializing in API log analysis and troubleshooting.
+
+IMPORTANT: You have access to ACTUAL log data below. Use this specific data in your response. Reference actual endpoints, error messages, status codes, and timestamps from the data.
+
+=== CONTEXT: RECENT LOG DATA ===
+%s
+================================
+
+USER QUESTION: %s
+
+Instructions:
+1. Analyze the actual log data provided above
+2. Reference specific endpoints, errors, and patterns you see in the data
+3. Provide concrete, data-driven insights
+4. Include specific examples from the logs
+5. Give actionable recommendations based on the real data
+
+Be specific and reference actual data points. Don't give generic responses.`, context, userMessage)
+
+	return s.GenerateContent(ctx, GenerateContentRequest{
+		Prompt: prompt,
+	})
+}
+
+// buildLogContext creates a structured summary of logs for RAG
+func (s *VertexAIService) buildLogContext(logs []map[string]interface{}) string {
+	var builder strings.Builder
+
+	// Statistics
+	totalLogs := len(logs)
+	errorCount := 0
+	endpoints := make(map[string]int)
+	statusCodes := make(map[float64]int)
+	errors := make(map[string]int)
+	latencies := []float64{}
+
+	// Analyze logs
+	for _, log := range logs {
+		// Count errors
+		if statusCode, ok := log["status_code"].(float64); ok {
+			statusCodes[statusCode]++
+			if statusCode >= 400 {
+				errorCount++
+			}
+		}
+
+		// Track endpoints
+		if path, ok := log["path"].(string); ok {
+			endpoints[path]++
+		}
+
+		// Track error messages
+		if errMsg, ok := log["error_message"].(string); ok && errMsg != "" {
+			errors[errMsg]++
+		}
+
+		// Track latencies
+		if latency, ok := log["latency_ms"].(float64); ok {
+			latencies = append(latencies, latency)
+		}
+	}
+
+	// Calculate average latency
+	avgLatency := 0.0
+	if len(latencies) > 0 {
+		sum := 0.0
+		for _, l := range latencies {
+			sum += l
+		}
+		avgLatency = sum / float64(len(latencies))
+	}
+
+	// Build context string
+	builder.WriteString(fmt.Sprintf("Total Logs Analyzed: %d\n", totalLogs))
+	builder.WriteString(fmt.Sprintf("Error Count: %d (%.1f%% error rate)\n", errorCount, float64(errorCount)/float64(totalLogs)*100))
+	builder.WriteString(fmt.Sprintf("Average Latency: %.0fms\n\n", avgLatency))
+
+	// Top failing endpoints
+	builder.WriteString("Top Endpoints by Request Count:\n")
+	count := 0
+	for endpoint, reqCount := range endpoints {
+		if count >= 10 {
+			break
+		}
+		builder.WriteString(fmt.Sprintf("  - %s: %d requests\n", endpoint, reqCount))
+		count++
+	}
+
+	// Status code breakdown
+	builder.WriteString("\nStatus Code Distribution:\n")
+	for code, count := range statusCodes {
+		builder.WriteString(fmt.Sprintf("  - %d: %d requests (%.1f%%)\n", int(code), count, float64(count)/float64(totalLogs)*100))
+	}
+
+	// Common errors
+	if len(errors) > 0 {
+		builder.WriteString("\nCommon Error Messages:\n")
+		count = 0
+		for errMsg, errCount := range errors {
+			if count >= 5 {
+				break
+			}
+			builder.WriteString(fmt.Sprintf("  - \"%s\": %d occurrences\n", errMsg, errCount))
+			count++
+		}
+	}
+
+	// Sample recent logs
+	builder.WriteString("\nRecent Log Samples:\n")
+	sampleCount := 3
+	if len(logs) < sampleCount {
+		sampleCount = len(logs)
+	}
+	for i := 0; i < sampleCount; i++ {
+		log := logs[i]
+		builder.WriteString(fmt.Sprintf("\nLog %d:\n", i+1))
+		if timestamp, ok := log["timestamp"].(string); ok {
+			builder.WriteString(fmt.Sprintf("  Time: %s\n", timestamp))
+		}
+		if method, ok := log["method"].(string); ok {
+			builder.WriteString(fmt.Sprintf("  Method: %s\n", method))
+		}
+		if path, ok := log["path"].(string); ok {
+			builder.WriteString(fmt.Sprintf("  Path: %s\n", path))
+		}
+		if statusCode, ok := log["status_code"].(float64); ok {
+			builder.WriteString(fmt.Sprintf("  Status: %d\n", int(statusCode)))
+		}
+		if latency, ok := log["latency_ms"].(float64); ok {
+			builder.WriteString(fmt.Sprintf("  Latency: %.0fms\n", latency))
+		}
+		if errMsg, ok := log["error_message"].(string); ok && errMsg != "" {
+			builder.WriteString(fmt.Sprintf("  Error: %s\n", errMsg))
+		}
+	}
+
+	return builder.String()
+}
