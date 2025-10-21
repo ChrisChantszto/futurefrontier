@@ -3,6 +3,7 @@ import { Send, Sparkles, TrendingUp, AlertTriangle, Activity, Trash2 } from 'luc
 import axios from 'axios'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { API_URL } from '../config'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -15,55 +16,55 @@ function formatAIResponse(data: any): string {
 
   let formatted = ''
 
-  // Handle traffic analysis response
-  if (data.analysis?.text) {
-    formatted += '📊 **AI Analysis**\n\n'
-    formatted += data.analysis.text.replace(/\*\*/g, '').substring(0, 1500)
-    if (data.analysis.text.length > 1500) formatted += '...\n\n'
-    formatted += '\n\n'
+  // Priority 1: Handle direct response field (from RAG chat)
+  if (data.response) {
+    formatted += data.response
+    // Only show logs count if context was actually used
+    if (data.context_used && data.logs_count !== undefined) {
+      formatted += `\n\n---\n\n📈 *Analyzed ${data.logs_count} logs*`
+    }
+    return formatted
   }
 
-  // Handle failing APIs
-  if (data.failing_apis && data.failing_apis.length > 0) {
-    formatted += '⚠️ **Failing APIs**\n\n'
-    data.failing_apis.slice(0, 5).forEach((api: any, i: number) => {
-      formatted += `${i + 1}. ${api.endpoint}\n`
-      formatted += `   • Failure Rate: ${(api.failure_rate * 100).toFixed(1)}%\n`
-      formatted += `   • Error Count: ${api.error_count}/${api.total_requests}\n`
-      formatted += `   • Avg Latency: ${Math.round(api.avg_latency?.value || 0)}ms\n\n`
-    })
+  // Priority 2: Handle analysis.text field (from pattern detection, etc.)
+  if (data.analysis?.text) {
+    formatted += data.analysis.text
+    if (data.logs_count !== undefined) {
+      formatted += `\n\n---\n\n📈 *Analyzed ${data.logs_count} logs*`
+    }
+    return formatted
+  }
+
+  // Priority 3: Handle legacy analysis object
+  if (data.analysis && typeof data.analysis === 'object' && !data.analysis.text) {
+    formatted += `📊 **AI Analysis**\n\n${JSON.stringify(data.analysis, null, 2)}\n\n`
   }
 
   // Handle patterns
   if (data.patterns && data.patterns.length > 0) {
-    formatted += '🔍 **Detected Patterns**\n\n'
-    data.patterns.slice(0, 5).forEach((pattern: any, i: number) => {
-      formatted += `${i + 1}. ${pattern.endpoint || pattern.error_pattern}\n`
-      formatted += `   • Occurrences: ${pattern.count || pattern.occurrences}\n`
-      if (pattern.failure_rate) formatted += `   • Failure Rate: ${(pattern.failure_rate * 100).toFixed(1)}%\n`
-      if (pattern.error_message) formatted += `   • Error: ${pattern.error_message}\n`
+    formatted += '## 🔍 Detected Patterns\n\n'
+    data.patterns.forEach((pattern: any, i: number) => {
+      formatted += `**Pattern ${i + 1}:** ${pattern.description || pattern.error_pattern}\n`
+      formatted += `- Occurrences: ${pattern.count || pattern.occurrences}\n`
+      if (pattern.endpoints) {
+        formatted += `- Affected Endpoints: ${pattern.endpoints.join(', ')}\n`
+      }
       formatted += '\n'
     })
   }
 
-  // Handle recommendations
-  if (data.recommendations && data.recommendations.length > 0) {
-    formatted += '💡 **Recommendations**\n\n'
-    data.recommendations.slice(0, 5).forEach((rec: any, i: number) => {
-      formatted += `${i + 1}. ${rec}\n`
+  // Handle failing APIs
+  if (data.failing_apis && data.failing_apis.length > 0) {
+    formatted += '## ⚠️ Failing APIs\n\n'
+    data.failing_apis.forEach((api: any) => {
+      formatted += `- **${api.endpoint}**: ${api.error_count} errors (${(api.failure_rate * 100).toFixed(1)}% failure rate)\n`
     })
     formatted += '\n'
   }
 
-  // Handle root cause
-  if (data.root_cause) {
-    formatted += '🎯 **Root Cause**\n\n'
-    formatted += data.root_cause + '\n\n'
-  }
-
-  // Show log count
-  if (data.logs_count !== undefined) {
-    formatted += `\n📈 Analyzed ${data.logs_count} logs\n`
+  // Show log count only if we have formatted content
+  if (formatted && data.logs_count !== undefined) {
+    formatted += `\n📈 *Analyzed ${data.logs_count} logs*\n`
   }
 
   return formatted || JSON.stringify(data, null, 2)
@@ -73,6 +74,10 @@ export default function AIChat() {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [timeRange, setTimeRange] = useState('1h')
+  const [useCustomRange, setUseCustomRange] = useState(false)
+  const [startDate, setStartDate] = useState('')
+  const [endDate, setEndDate] = useState('')
 
   // Load chat history from localStorage on mount
   useEffect(() => {
@@ -103,9 +108,9 @@ export default function AIChat() {
   }
 
   const quickActions = [
-    { label: 'Detect Patterns', icon: TrendingUp, endpoint: '/api/ai/detect-patterns', body: { time_range: '1h', limit: 500 } },
-    { label: 'Find Failures', icon: AlertTriangle, endpoint: '/api/ai/analyze-failures', body: { time_range: '1h' } },
-    { label: 'Traffic Analysis', icon: Activity, endpoint: '/api/ai/analyze-traffic-failures', body: { time_range: '1h', min_failure_rate: 0.1 } },
+    { label: 'Detect Patterns', icon: TrendingUp, endpoint: '/api/ai/detect-patterns' },
+    { label: 'Find Failures', icon: AlertTriangle, endpoint: '/api/ai/analyze-failures' },
+    { label: 'Traffic Analysis', icon: Activity, endpoint: '/api/ai/analyze-traffic-failures' },
   ]
 
   const sendMessage = async (message: string, endpoint = '/api/ai/chat', customBody?: any) => {
@@ -122,13 +127,22 @@ export default function AIChat() {
     setLoading(true)
 
     try {
-      const body = customBody || {
+      let body = customBody || {
         message,
-        time_range: '1h',
-        limit: 100
+        time_range: useCustomRange ? 'custom' : timeRange,
+        limit: 2000 // Increased from 200 to analyze more logs
       }
 
-      const response = await axios.post(`http://localhost:8080${endpoint}`, body, {
+      // Add custom date range if selected
+      if (useCustomRange && startDate && endDate) {
+        body = {
+          ...body,
+          start_date: startDate,
+          end_date: endDate
+        }
+      }
+
+      const response = await axios.post(`${API_URL}${endpoint}`, body, {
         withCredentials: true
       })
 
@@ -152,7 +166,19 @@ export default function AIChat() {
   }
 
   const handleQuickAction = (action: typeof quickActions[0]) => {
-    sendMessage(action.label, action.endpoint, action.body)
+    let body: any = {
+      time_range: useCustomRange ? 'custom' : timeRange,
+      limit: 2000, // Increased from 1000 to analyze more logs
+      min_failure_rate: 0.1
+    }
+
+    // Add custom date range if selected
+    if (useCustomRange && startDate && endDate) {
+      body.start_date = startDate
+      body.end_date = endDate
+    }
+
+    sendMessage(action.label, action.endpoint, body)
   }
 
   return (
@@ -199,10 +225,79 @@ export default function AIChat() {
         )}
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick Actions & Time Range */}
       <div style={{ padding: '1.5rem 2rem', background: 'white', borderBottom: '1px solid #e2e8f0' }}>
-        <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#4a5568', marginBottom: '0.75rem' }}>
-          Quick Actions:
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+          <div style={{ fontSize: '0.875rem', fontWeight: '600', color: '#4a5568' }}>
+            Quick Actions:
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
+            <label style={{ fontSize: '0.875rem', color: '#4a5568', fontWeight: '500' }}>
+              Time Range:
+            </label>
+            <select
+              value={useCustomRange ? 'custom' : timeRange}
+              onChange={(e) => {
+                if (e.target.value === 'custom') {
+                  setUseCustomRange(true)
+                } else {
+                  setUseCustomRange(false)
+                  setTimeRange(e.target.value)
+                }
+              }}
+              style={{
+                padding: '0.5rem 0.75rem',
+                border: '1px solid #e2e8f0',
+                borderRadius: '6px',
+                fontSize: '0.875rem',
+                cursor: 'pointer',
+                background: 'white',
+                color: '#2d3748'
+              }}
+            >
+              <option value="15m">Last 15 minutes</option>
+              <option value="1h">Last hour</option>
+              <option value="6h">Last 6 hours</option>
+              <option value="24h">Last 24 hours</option>
+              <option value="7d">Last 7 days</option>
+              <option value="30d">Last 30 days</option>
+              <option value="all">All data</option>
+              <option value="custom">Custom range</option>
+            </select>
+            {useCustomRange && (
+              <>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  style={{
+                    padding: '0.5rem 0.75rem',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                    background: 'white',
+                    color: '#2d3748',
+                    cursor: 'pointer'
+                  }}
+                />
+                <span style={{ color: '#718096' }}>to</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  style={{
+                    padding: '0.5rem 0.75rem',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '6px',
+                    fontSize: '0.875rem',
+                    background: 'white',
+                    color: '#2d3748',
+                    cursor: 'pointer'
+                  }}
+                />
+              </>
+            )}
+          </div>
         </div>
         <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
           {quickActions.map((action) => {

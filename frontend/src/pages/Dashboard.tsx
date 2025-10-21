@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Activity, AlertTriangle, TrendingUp, Clock, Database, Zap } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import axios from 'axios'
+import { API_URL } from '../config'
 
 export default function Dashboard() {
   const [stats, setStats] = useState({
@@ -15,7 +16,7 @@ export default function Dashboard() {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await axios.get('http://localhost:8080/api/logs/stats', {
+        const response = await axios.get(`${API_URL}/api/logs/stats`, {
           withCredentials: true
         })
 

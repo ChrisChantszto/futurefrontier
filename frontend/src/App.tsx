@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import Login from './pages/Login'
+import Layout from './components/Layout'
 import Dashboard from './pages/Dashboard'
 import Discover from './pages/Discover'
 import AIChat from './pages/AIChat'
-import Layout from './components/Layout'
+import Login from './pages/Login'
+import { API_URL } from './config'
 import './App.css'
 
 function App() {
@@ -15,7 +16,7 @@ function App() {
     // Check if user is already logged in
     const checkAuth = async () => {
       try {
-        const response = await fetch('http://localhost:8080/api/healthz', {
+        const response = await fetch(`${API_URL}/api/healthz`, {
           credentials: 'include'
         })
         if (response.ok) {

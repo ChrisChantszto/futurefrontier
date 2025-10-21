@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { LogIn } from 'lucide-react'
 import axios from 'axios'
+import { API_URL } from '../config'
 
 interface LoginProps {
   onLogin: () => void
@@ -18,7 +19,7 @@ export default function Login({ onLogin }: LoginProps) {
     setLoading(true)
 
     try {
-      const response = await axios.post('http://localhost:8080/api/auth/login', {
+      const response = await axios.post(`${API_URL}/api/auth/login`, {
         Email: email,
         Password: password
       }, {
