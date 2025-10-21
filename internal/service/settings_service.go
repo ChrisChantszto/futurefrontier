@@ -6,7 +6,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/models"
+	"github.com/ChrisChantszto/futurefrontier/internal/models"
 )
 
 type SettingsService struct {

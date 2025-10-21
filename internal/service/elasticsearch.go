@@ -12,8 +12,8 @@ import (
 	"github.com/elastic/go-elasticsearch/v8/esapi"
 	"go.uber.org/zap"
 
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/config"
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/models"
+	"github.com/ChrisChantszto/futurefrontier/internal/config"
+	"github.com/ChrisChantszto/futurefrontier/internal/models"
 )
 
 type ElasticsearchService struct {

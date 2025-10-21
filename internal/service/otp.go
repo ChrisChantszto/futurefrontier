@@ -17,8 +17,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/config"
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/models"
+	"github.com/ChrisChantszto/futurefrontier/internal/config"
+	"github.com/ChrisChantszto/futurefrontier/internal/models"
 )
 
 type OTPService struct {

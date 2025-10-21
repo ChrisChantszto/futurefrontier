@@ -16,12 +16,12 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.uber.org/zap"
 
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/config"
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/db"
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/middleware"
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/models"
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/service"
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/transport/http"
+	"github.com/ChrisChantszto/futurefrontier/internal/config"
+	"github.com/ChrisChantszto/futurefrontier/internal/db"
+	"github.com/ChrisChantszto/futurefrontier/internal/middleware"
+	"github.com/ChrisChantszto/futurefrontier/internal/models"
+	"github.com/ChrisChantszto/futurefrontier/internal/service"
+	"github.com/ChrisChantszto/futurefrontier/internal/transport/http"
 )
 
 func connectMongo(ctx context.Context, uri string) (*mongo.Client, error) {

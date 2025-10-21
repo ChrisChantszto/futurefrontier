@@ -10,7 +10,7 @@ import (
 	"go.mongodb.org/mongo-driver/mongo/options"
 	"go.uber.org/zap"
 
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/models"
+	"github.com/ChrisChantszto/futurefrontier/internal/models"
 )
 
 const (

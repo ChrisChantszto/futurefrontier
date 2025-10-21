@@ -9,9 +9,9 @@ import (
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/models"
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/service"
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/utils"
+	"github.com/ChrisChantszto/futurefrontier/internal/models"
+	"github.com/ChrisChantszto/futurefrontier/internal/service"
+	"github.com/ChrisChantszto/futurefrontier/internal/utils"
 )
 
 // LoggerMiddleware creates a new logging middleware

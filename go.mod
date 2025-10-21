@@ -1,4 +1,4 @@
-module github.com/onetakesolutions/onetake-corpsite-backend
+module github.com/ChrisChantszto/futurefrontier
 
 go 1.24.0
 

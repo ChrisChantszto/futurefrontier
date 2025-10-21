@@ -8,8 +8,8 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/config"
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/models"
+	"github.com/ChrisChantszto/futurefrontier/internal/config"
+	"github.com/ChrisChantszto/futurefrontier/internal/models"
 )
 
 // LoggerService handles async logging with queue and backup mechanisms

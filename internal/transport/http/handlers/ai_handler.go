@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/service"
+	"github.com/ChrisChantszto/futurefrontier/internal/service"
 	"go.uber.org/zap"
 )
 

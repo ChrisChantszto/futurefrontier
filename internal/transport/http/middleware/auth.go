@@ -3,7 +3,7 @@ package middleware
 import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/config"
+	"github.com/ChrisChantszto/futurefrontier/internal/config"
 )
 
 // RequireAuth validates the "access" JWT cookie and sets c.Locals("userEmail", email)

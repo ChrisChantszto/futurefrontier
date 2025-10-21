@@ -8,9 +8,9 @@ import (
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.uber.org/zap"
 
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/config"
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/models"
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/service"
+	"github.com/ChrisChantszto/futurefrontier/internal/config"
+	"github.com/ChrisChantszto/futurefrontier/internal/models"
+	"github.com/ChrisChantszto/futurefrontier/internal/service"
 )
 
 var idRE = regexp.MustCompile(`^[a-z0-9]+(-[a-z0-9]+)*$`)

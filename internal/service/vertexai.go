@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/onetakesolutions/onetake-corpsite-backend/internal/config"
+	"github.com/ChrisChantszto/futurefrontier/internal/config"
 	"go.uber.org/zap"
 	"google.golang.org/genai"
 )
