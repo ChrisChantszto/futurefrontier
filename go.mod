@@ -12,7 +12,7 @@ require (
 	go.mongodb.org/mongo-driver v1.17.4
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.41.0
-	google.golang.org/genai v1.31.0
+	google.golang.org/genai v1.28.0
 )
 
 require (
