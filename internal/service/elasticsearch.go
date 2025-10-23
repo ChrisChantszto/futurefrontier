@@ -37,9 +37,14 @@ func NewElasticsearchService(cfg config.LoggingConfig, logger *zap.Logger) (*Ela
 		Addresses: []string{cfg.ElasticsearchURL},
 	}
 
-	if cfg.ElasticsearchUser != "" && cfg.ElasticsearchPass != "" {
+	// Prefer API Key authentication (for Elastic Cloud)
+	if cfg.ElasticsearchAPIKey != "" {
+		esConfig.APIKey = cfg.ElasticsearchAPIKey
+		logger.Info("Using Elasticsearch API Key authentication")
+	} else if cfg.ElasticsearchUser != "" && cfg.ElasticsearchPass != "" {
 		esConfig.Username = cfg.ElasticsearchUser
 		esConfig.Password = cfg.ElasticsearchPass
+		logger.Info("Using Elasticsearch username/password authentication")
 	}
 
 	client, err := elasticsearch.NewClient(esConfig)
@@ -365,8 +370,114 @@ func (es *ElasticsearchService) SearchLogs(ctx context.Context, timeRange string
 	return logs, nil
 }
 
-// parseTimeRange parses time range strings like "1h", "24h", "7d" into duration
+// SearchLogsByDateRange searches for logs in Elasticsearch based on custom date range
+func (es *ElasticsearchService) SearchLogsByDateRange(ctx context.Context, startDate, endDate string, limit int) ([]map[string]interface{}, error) {
+	if es.config.LocalMode || es.client == nil {
+		es.logger.Warn("Cannot search logs in local mode")
+		return []map[string]interface{}{}, nil
+	}
+
+	// Parse dates (expected format: YYYY-MM-DD)
+	start, err := time.Parse("2006-01-02", startDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid start date format: %w", err)
+	}
+
+	end, err := time.Parse("2006-01-02", endDate)
+	if err != nil {
+		return nil, fmt.Errorf("invalid end date format: %w", err)
+	}
+
+	// Set end date to end of day
+	end = end.Add(24*time.Hour - time.Second)
+
+	// Build search query
+	query := map[string]interface{}{
+		"query": map[string]interface{}{
+			"range": map[string]interface{}{
+				"timestamp": map[string]interface{}{
+					"gte": start.Format(time.RFC3339),
+					"lte": end.Format(time.RFC3339),
+				},
+			},
+		},
+		"sort": []map[string]interface{}{
+			{"timestamp": map[string]string{"order": "desc"}},
+		},
+		"size": limit,
+	}
+
+	queryJSON, err := json.Marshal(query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal query: %w", err)
+	}
+
+	// Search across all API log indexes
+	indexPattern := "api-logs-*"
+	
+	req := esapi.SearchRequest{
+		Index: []string{indexPattern},
+		Body:  bytes.NewReader(queryJSON),
+	}
+
+	res, err := req.Do(ctx, es.client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute search: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.IsError() {
+		return nil, fmt.Errorf("elasticsearch error: %s", res.String())
+	}
+
+	var result map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	hits, ok := result["hits"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid response format")
+	}
+
+	hitsArray, ok := hits["hits"].([]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid hits format")
+	}
+
+	logs := make([]map[string]interface{}, 0, len(hitsArray))
+	for _, hit := range hitsArray {
+		hitMap, ok := hit.(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		source, ok := hitMap["_source"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+
+		logs = append(logs, source)
+	}
+
+	es.logger.Info("Retrieved logs from Elasticsearch by date range",
+		zap.Int("count", len(logs)),
+		zap.String("start_date", startDate),
+		zap.String("end_date", endDate))
+
+	return logs, nil
+}
+
+// parseTimeRange parses time range strings like "1h", "24h", "7d", "all" into duration
 func parseTimeRange(timeRange string) (time.Duration, error) {
+	// Handle special cases
+	if timeRange == "all" {
+		return 365 * 24 * time.Hour, nil // 1 year for "all data"
+	}
+	if timeRange == "custom" {
+		return 0, nil // Custom range handled separately
+	}
+
 	if len(timeRange) < 2 {
 		return 0, fmt.Errorf("invalid time range format")
 	}

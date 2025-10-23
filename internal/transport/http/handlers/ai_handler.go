@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -199,11 +200,13 @@ func (h *AIHandler) SuggestOptimizations(c *fiber.Ctx) error {
 	})
 }
 
-// ChatWithLogs provides conversational interface to query logs
+// ChatWithLogs provides conversational interface to query logs with RAG
 func (h *AIHandler) ChatWithLogs(c *fiber.Ctx) error {
 	var req struct {
 		Message   string `json:"message" validate:"required"`
 		TimeRange string `json:"time_range"`
+		StartDate string `json:"start_date"` // For custom range
+		EndDate   string `json:"end_date"`   // For custom range
 		Limit     int    `json:"limit"`
 	}
 
@@ -220,29 +223,96 @@ func (h *AIHandler) ChatWithLogs(c *fiber.Ctx) error {
 		req.TimeRange = "1h"
 	}
 	if req.Limit == 0 {
-		req.Limit = 100
+		req.Limit = 200
 	}
 
-	// Fetch logs from Elasticsearch
-	logs, err := h.esClient.SearchLogs(context.Background(), req.TimeRange, req.Limit)
+	// Check if this is a general question (not log-related)
+	isGeneral := isGeneralQuestion(req.Message)
+
+	if isGeneral {
+		// Handle general questions without log context
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		resp, err := h.vertexAI.GenerateContent(ctx, service.GenerateContentRequest{
+			Prompt: req.Message,
+		})
+		if err != nil {
+			h.logger.Error("Failed to generate response", zap.Error(err))
+			return JSONError(c, fiber.StatusInternalServerError, "Failed to generate response", 0, err.Error())
+		}
+
+		return JSONSuccess(c, "Response generated successfully", fiber.Map{
+			"response":     resp.Text,
+			"context_used": false,
+		})
+	}
+
+	// Fetch logs from Elasticsearch for context
+	var logs []map[string]interface{}
+	var err error
+
+	if req.TimeRange == "custom" && req.StartDate != "" && req.EndDate != "" {
+		// Use custom date range
+		logs, err = h.esClient.SearchLogsByDateRange(context.Background(), req.StartDate, req.EndDate, req.Limit)
+	} else {
+		// Use predefined time range
+		logs, err = h.esClient.SearchLogs(context.Background(), req.TimeRange, req.Limit)
+	}
+
 	if err != nil {
 		h.logger.Error("Failed to fetch logs from Elasticsearch", zap.Error(err))
 		return JSONError(c, fiber.StatusInternalServerError, "Failed to fetch logs", 0, err.Error())
 	}
 
+	if len(logs) == 0 {
+		return JSONSuccess(c, "No logs found", fiber.Map{
+			"response":     "I couldn't find any logs in the specified time range. Please try a different time range or check if logs are being collected.",
+			"logs_count":   0,
+			"context_used": false,
+		})
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 
-	// Analyze logs with user's question
-	resp, err := h.vertexAI.AnalyzeAPILogs(ctx, logs, req.Message)
+	// Use RAG to generate context-aware response
+	resp, err := h.vertexAI.ChatWithContext(ctx, req.Message, logs)
 	if err != nil {
-		h.logger.Error("Failed to process chat message", zap.Error(err))
-		return JSONError(c, fiber.StatusInternalServerError, "Failed to process message", 0, err.Error())
+		h.logger.Error("Failed to process chat message with context", zap.Error(err))
+		return JSONError(c, fiber.StatusInternalServerError, "Failed to analyze logs", 0, err.Error())
 	}
 
-	return JSONSuccess(c, "Message processed successfully", fiber.Map{
-		"response":   resp.Text,
-		"logs_count": len(logs),
-		"time_range": req.TimeRange,
+	return JSONSuccess(c, "Analysis completed successfully", fiber.Map{
+		"response":     resp.Text,
+		"logs_count":   len(logs),
+		"context_used": true,
+		"time_range":   req.TimeRange,
 	})
+}
+
+// isGeneralQuestion checks if the user's message is a general question
+func isGeneralQuestion(message string) bool {
+	generalPhrases := []string{
+		"hello", "hi", "hey", "how are you", "what can you do",
+		"help", "who are you", "what are you", "introduce yourself",
+		"good morning", "good afternoon", "good evening",
+		"thanks", "thank you", "bye", "goodbye",
+	}
+
+	lowerMsg := strings.ToLower(message)
+	for _, phrase := range generalPhrases {
+		if strings.Contains(lowerMsg, phrase) {
+			return true
+		}
+	}
+
+	// If message is very short and doesn't mention logs/errors/api, it's likely general
+	if len(message) < 20 && !strings.Contains(lowerMsg, "log") &&
+		!strings.Contains(lowerMsg, "error") && !strings.Contains(lowerMsg, "api") &&
+		!strings.Contains(lowerMsg, "fail") && !strings.Contains(lowerMsg, "issue") {
+		return true
+	}
+
+	return false
 }

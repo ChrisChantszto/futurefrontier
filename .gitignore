@@ -1,5 +1,59 @@
-# Exclude the .env file
+# Environment variables
 .env
+.env.example
+.env.local
+.env.production.local
+.env.development.local
+frontend/.env.local
+frontend/.env.production.local
 
-# Exclude the specific JSON file
-grand-principle-475206-b5-c127d3a24967.json
+# Google Cloud credentials (exclude ALL JSON credential files)
+*-*.json
+grand-principle-475206-b5-*.json
+
+# But keep these JSON files
+!package.json
+!package-lock.json
+!tsconfig.json
+!railway.json
+!frontend/package.json
+!frontend/package-lock.json
+!frontend/tsconfig.json
+
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Build outputs
+dist/
+build/
+frontend/dist/
+frontend/build/
+
+# Go build outputs
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+main
+tmp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/

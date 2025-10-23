@@ -60,6 +60,7 @@ type LoggingConfig struct {
 	ElasticsearchURL   string
 	ElasticsearchUser  string
 	ElasticsearchPass  string
+	ElasticsearchAPIKey string // For Elastic Cloud API Key authentication
 	EnableRequestBody  bool
 	EnableResponseBody bool
 	EnableHeaders      bool
@@ -183,19 +184,20 @@ func Load() Config {
 
 		// Logging Configuration
 		Logging: LoggingConfig{
-			ProjectID:          getenv("LOG_PROJECT_ID", "onetake-corpsite-backend"),
-			ElasticsearchURL:   getenv("ELASTICSEARCH_URL", "http://localhost:9200"),
-			ElasticsearchUser:  getenv("ELASTICSEARCH_USER", ""),
-			ElasticsearchPass:  getenv("ELASTICSEARCH_PASS", ""),
-			EnableRequestBody:  getbool("LOG_ENABLE_REQUEST_BODY", false),
-			EnableResponseBody: getbool("LOG_ENABLE_RESPONSE_BODY", false),
-			EnableHeaders:      getbool("LOG_ENABLE_HEADERS", false),
-			MaxBodySize:        int64(atoi(getenv("LOG_MAX_BODY_SIZE", "1024"), 1024)),
-			QueueSize:          atoi(getenv("LOG_QUEUE_SIZE", "1000"), 1000),
-			WorkerCount:        atoi(getenv("LOG_WORKER_COUNT", "3"), 3),
-			RetryAttempts:      atoi(getenv("LOG_RETRY_ATTEMPTS", "3"), 3),
-			RetryInterval:      atoi(getenv("LOG_RETRY_INTERVAL", "30"), 30),
-			LocalMode:          getbool("LOG_LOCAL_MODE", true), // Default to local for development
+			ProjectID:           getenv("LOG_PROJECT_ID", "futurefrontier"),
+			ElasticsearchURL:    getenv("ELASTICSEARCH_URL", "http://localhost:9200"),
+			ElasticsearchUser:   getenv("ELASTICSEARCH_USER", ""),
+			ElasticsearchPass:   getenv("ELASTICSEARCH_PASS", ""),
+			ElasticsearchAPIKey: getenv("ELASTICSEARCH_API_KEY", ""),
+			EnableRequestBody:   getbool("LOG_ENABLE_REQUEST_BODY", false),
+			EnableResponseBody:  getbool("LOG_ENABLE_RESPONSE_BODY", false),
+			EnableHeaders:       getbool("LOG_ENABLE_HEADERS", false),
+			MaxBodySize:         int64(atoi(getenv("LOG_MAX_BODY_SIZE", "1024"), 1024)),
+			QueueSize:           atoi(getenv("LOG_QUEUE_SIZE", "1000"), 1000),
+			WorkerCount:         atoi(getenv("LOG_WORKER_COUNT", "3"), 3),
+			RetryAttempts:       atoi(getenv("LOG_RETRY_ATTEMPTS", "3"), 3),
+			RetryInterval:       atoi(getenv("LOG_RETRY_INTERVAL", "30"), 30),
+			LocalMode:           getbool("LOG_LOCAL_MODE", false), // Changed to false for production
 		},
 
 		// Google Cloud Configuration

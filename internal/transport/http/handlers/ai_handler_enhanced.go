@@ -12,6 +12,8 @@ import (
 func (h *AIHandler) DetectPatterns(c *fiber.Ctx) error {
 	var req struct {
 		TimeRange      string `json:"time_range"`
+		StartDate      string `json:"start_date"`
+		EndDate        string `json:"end_date"`
 		Limit          int    `json:"limit"`
 		MinOccurrences int    `json:"min_occurrences"`
 	}
@@ -25,11 +27,19 @@ func (h *AIHandler) DetectPatterns(c *fiber.Ctx) error {
 		req.TimeRange = "24h"
 	}
 	if req.Limit == 0 {
-		req.Limit = 500
+		req.Limit = 1000
 	}
 
 	// Fetch logs from Elasticsearch
-	logs, err := h.esClient.SearchLogs(context.Background(), req.TimeRange, req.Limit)
+	var logs []map[string]interface{}
+	var err error
+
+	if req.TimeRange == "custom" && req.StartDate != "" && req.EndDate != "" {
+		logs, err = h.esClient.SearchLogsByDateRange(context.Background(), req.StartDate, req.EndDate, req.Limit)
+	} else {
+		logs, err = h.esClient.SearchLogs(context.Background(), req.TimeRange, req.Limit)
+	}
+
 	if err != nil {
 		h.logger.Error("Failed to fetch logs", zap.Error(err))
 		return JSONError(c, fiber.StatusInternalServerError, "Failed to fetch logs", 0, err.Error())
@@ -50,7 +60,9 @@ func (h *AIHandler) DetectPatterns(c *fiber.Ctx) error {
 	}
 
 	return JSONSuccess(c, "Patterns detected successfully", fiber.Map{
-		"patterns":   resp,
+		"analysis": fiber.Map{
+			"text": resp.Text,
+		},
 		"logs_count": len(logs),
 		"time_range": req.TimeRange,
 	})
@@ -61,6 +73,8 @@ func (h *AIHandler) AnalyzeFailures(c *fiber.Ctx) error {
 	var req struct {
 		Endpoint    string `json:"endpoint"`
 		TimeRange   string `json:"time_range"`
+		StartDate   string `json:"start_date"`
+		EndDate     string `json:"end_date"`
 		StatusCodes []int  `json:"status_codes"`
 	}
 
@@ -127,6 +141,8 @@ func (h *AIHandler) RootCauseAnalysis(c *fiber.Ctx) error {
 	var req struct {
 		ErrorPattern string `json:"error_pattern"`
 		TimeRange    string `json:"time_range"`
+		StartDate    string `json:"start_date"`
+		EndDate      string `json:"end_date"`
 		Limit        int    `json:"limit"`
 	}
 
@@ -178,6 +194,8 @@ func (h *AIHandler) RootCauseAnalysis(c *fiber.Ctx) error {
 func (h *AIHandler) AnalyzeTrafficFailures(c *fiber.Ctx) error {
 	var req struct {
 		TimeRange string  `json:"time_range"`
+		StartDate string  `json:"start_date"`
+		EndDate   string  `json:"end_date"`
 		Limit     int     `json:"limit"`
 		MinRate   float64 `json:"min_failure_rate"`
 	}
@@ -211,7 +229,14 @@ func (h *AIHandler) AnalyzeTrafficFailures(c *fiber.Ctx) error {
 	}
 
 	// Fetch detailed logs for failing APIs
-	logs, err := h.esClient.SearchLogs(context.Background(), req.TimeRange, req.Limit)
+	var logs []map[string]interface{}
+
+	if req.TimeRange == "custom" && req.StartDate != "" && req.EndDate != "" {
+		logs, err = h.esClient.SearchLogsByDateRange(context.Background(), req.StartDate, req.EndDate, req.Limit)
+	} else {
+		logs, err = h.esClient.SearchLogs(context.Background(), req.TimeRange, req.Limit)
+	}
+
 	if err != nil {
 		h.logger.Error("Failed to fetch logs", zap.Error(err))
 		return JSONError(c, fiber.StatusInternalServerError, "Failed to fetch logs", 0, err.Error())

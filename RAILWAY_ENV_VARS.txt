@@ -1,0 +1,52 @@
+# ========================================
+# RAILWAY ENVIRONMENT VARIABLES
+# Copy and paste these into Railway Dashboard
+# ========================================
+
+# MongoDB Configuration
+MONGODB_URI=mongodb+srv://chantsztochris_db_user:pJmeH1vRNBWbWsfC@cluster0.xjbv6ys.mongodb.net/futurefrontier?retryWrites=true&w=majority
+MONGODB_DATABASE=futurefrontier
+
+# Elasticsearch Cloud Configuration
+ELASTICSEARCH_URL=https://my-elasticsearch-project-aa1f20.es.us-central1.gcp.elastic.cloud:443
+ELASTICSEARCH_API_KEY=N0RJRkVKb0JUZkhaRzVOdTdmZU06Umw4MThoTU1kVVMza043LXJ5SUtBUQ==
+
+# Vertex AI - PASTE YOUR ENTIRE JSON FILE CONTENT
+# Open grand-principle-475206-b5-6a55c4da97f9.json and copy ALL content
+GOOGLE_CREDENTIALS_JSON=<PASTE_ENTIRE_JSON_CONTENT_HERE>
+
+# Vertex AI Configuration
+VERTEX_AI_PROJECT_ID=grand-principle-475206-b5
+VERTEX_AI_LOCATION=us-central1
+
+# Server Configuration
+PORT=8080
+GIN_MODE=release
+
+# CORS - UPDATE THIS AFTER VERCEL DEPLOYMENT
+CORS_ORIGINS=https://your-app.vercel.app,http://localhost:5173
+
+# Logging
+LOG_PROJECT_ID=futurefrontier
+LOG_LOCAL_MODE=false
+
+# JWT Secrets (generate random strings for production)
+JWT_SECRET=futurefrontier-jwt-secret-2024-change-this
+JWT_REFRESH_SECRET=futurefrontier-refresh-secret-2024-change-this
+
+# Admin Credentials
+SUPERADMIN_EMAIL=admin@example.com
+SUPERADMIN_PASSWORD=P@ssw0rd!
+
+# ========================================
+# INSTRUCTIONS:
+# 1. Go to Railway dashboard
+# 2. Click on your project
+# 3. Go to "Variables" tab
+# 4. Add each variable above (one per line)
+# 5. For GOOGLE_CREDENTIALS_JSON:
+#    - Open grand-principle-475206-b5-6a55c4da97f9.json
+#    - Copy ENTIRE content (all lines)
+#    - Paste as the value
+# 6. Click "Deploy" or wait for auto-deploy
+# ========================================

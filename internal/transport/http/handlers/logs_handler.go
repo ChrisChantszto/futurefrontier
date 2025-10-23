@@ -21,18 +21,29 @@ func NewLogsHandler(esService *service.ElasticsearchService, log *zap.Logger) *L
 // GetLogs retrieves logs from Elasticsearch
 func (h *LogsHandler) GetLogs(c *fiber.Ctx) error {
 	// Get query parameters
-	size := c.QueryInt("size", 100)
+	size := c.QueryInt("size", 10000) // Increased to support pagination
 	searchQuery := c.Query("search", "")
 	statusFilter := c.Query("status", "all")
+	timeRange := c.Query("time_range", "24h")
+	startDate := c.Query("start_date", "")
+	endDate := c.Query("end_date", "")
 
 	h.log.Info("Fetching logs", 
 		zap.Int("size", size),
 		zap.String("search", searchQuery),
 		zap.String("status", statusFilter),
+		zap.String("time_range", timeRange),
 	)
 
-	// Fetch logs using SearchLogs
-	logs, err := h.esService.SearchLogs(c.Context(), "24h", size)
+	// Fetch logs using SearchLogs or SearchLogsByDateRange
+	var logs []map[string]interface{}
+	var err error
+
+	if timeRange == "custom" && startDate != "" && endDate != "" {
+		logs, err = h.esService.SearchLogsByDateRange(c.Context(), startDate, endDate, size)
+	} else {
+		logs, err = h.esService.SearchLogs(c.Context(), timeRange, size)
+	}
 	if err != nil {
 		h.log.Error("Failed to fetch logs", zap.Error(err))
 		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
