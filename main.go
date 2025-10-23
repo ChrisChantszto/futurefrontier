@@ -43,28 +43,31 @@ func connectMongo(ctx context.Context, uri string) (*mongo.Client, error) {
 }
 
 func ensureGoogleCredentials() {
-	credentials := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
-	if credentials == "" {
-		credentials = os.Getenv("GOOGLE_CREDENTIALS_JSON")
-	}
-	if credentials != "" {
-		err := ioutil.WriteFile("/tmp/gcp-key.json", []byte(credentials), 0600)
-		if err != nil {
-			panic(err)
-		}
-		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/gcp-key.json")
-	}
+    // Prefer explicit JSON env if provided
+    if jsonCreds := os.Getenv("GOOGLE_CREDENTIALS_JSON"); jsonCreds != "" {
+        if err := ioutil.WriteFile("/tmp/gcp-key.json", []byte(jsonCreds), 0600); err != nil {
+            panic(err)
+        }
+        os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/gcp-key.json")
+    } else if val := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS"); val != "" {
+        trimmed := strings.TrimSpace(val)
+        // If the value looks like inline JSON (starts with '{'), write it to a file
+        if strings.HasPrefix(trimmed, "{") {
+            if err := ioutil.WriteFile("/tmp/gcp-key.json", []byte(trimmed), 0600); err != nil {
+                panic(err)
+            }
+            os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/gcp-key.json")
+        }
+        // otherwise assume it's already a valid file path
+    }
 
-	// Map VERTEX_* vars to GCP_* if missing
-	if os.Getenv("GCP_PROJECT_ID") == "" && os.Getenv("VERTEX_PROJECT_ID") != "" {
-		os.Setenv("GCP_PROJECT_ID", os.Getenv("VERTEX_PROJECT_ID"))
-	}
-	if os.Getenv("GCP_REGION") == "" && os.Getenv("VERTEX_REGION") != "" {
-		os.Setenv("GCP_REGION", os.Getenv("VERTEX_REGION"))
-	}
-	if os.Getenv("GCP_KEY_FILE") == "" && os.Getenv("VERTEX_KEY_FILE") != "" {
-		os.Setenv("GCP_KEY_FILE", os.Getenv("VERTEX_KEY_FILE"))
-	}
+    // Map VERTEX_AI_* vars to GCP_* if missing (code expects GCP_* per config.go)
+    if os.Getenv("GCP_PROJECT_ID") == "" && os.Getenv("VERTEX_AI_PROJECT_ID") != "" {
+        os.Setenv("GCP_PROJECT_ID", os.Getenv("VERTEX_AI_PROJECT_ID"))
+    }
+    if os.Getenv("GCP_LOCATION") == "" && os.Getenv("VERTEX_AI_LOCATION") != "" {
+        os.Setenv("GCP_LOCATION", os.Getenv("VERTEX_AI_LOCATION"))
+    }
 }
 
 func main() {
