@@ -13,6 +13,8 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o main .
 # Run stage: minimal image
 FROM gcr.io/distroless/base-debian12
 WORKDIR /app
+# Ensure CA certificates are available for TLS (MongoDB Atlas)
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /app/main /app/main
 
 # Railway provides PORT env var
