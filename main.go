@@ -25,7 +25,11 @@ import (
 )
 
 func connectMongo(ctx context.Context, uri string) (*mongo.Client, error) {
-	clientOpts := options.Client().ApplyURI(uri)
+	clientOpts := options.Client().
+		ApplyURI(uri).
+		SetServerSelectionTimeout(10 * time.Second).
+		SetConnectTimeout(10 * time.Second)
+	
 	client, err := mongo.Connect(ctx, clientOpts)
 	if err != nil {
 		return nil, err

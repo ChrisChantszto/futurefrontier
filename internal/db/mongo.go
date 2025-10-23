@@ -14,7 +14,12 @@ type Mongo struct {
 }
 
 func Connect(ctx context.Context, uri, dbName string) (*Mongo, error) {
-	client, err := mongo.Connect(ctx, options.Client().ApplyURI(uri))
+	clientOpts := options.Client().
+		ApplyURI(uri).
+		SetServerSelectionTimeout(10 * time.Second).
+		SetConnectTimeout(10 * time.Second)
+	
+	client, err := mongo.Connect(ctx, clientOpts)
 	if err != nil {
 		return nil, err
 	}
