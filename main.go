@@ -4,8 +4,10 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
+	"io/ioutil"
 
 	"github.com/gofiber/contrib/fiberzap"
 	"github.com/gofiber/fiber/v2"
@@ -40,8 +42,34 @@ func connectMongo(ctx context.Context, uri string) (*mongo.Client, error) {
 	return client, nil
 }
 
+func ensureGoogleCredentials() {
+	credentials := os.Getenv("GOOGLE_APPLICATION_CREDENTIALS")
+	if credentials == "" {
+		credentials = os.Getenv("GOOGLE_CREDENTIALS_JSON")
+	}
+	if credentials != "" {
+		err := ioutil.WriteFile("/tmp/gcp-key.json", []byte(credentials), 0600)
+		if err != nil {
+			panic(err)
+		}
+		os.Setenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/gcp-key.json")
+	}
+
+	// Map VERTEX_* vars to GCP_* if missing
+	if os.Getenv("GCP_PROJECT_ID") == "" && os.Getenv("VERTEX_PROJECT_ID") != "" {
+		os.Setenv("GCP_PROJECT_ID", os.Getenv("VERTEX_PROJECT_ID"))
+	}
+	if os.Getenv("GCP_REGION") == "" && os.Getenv("VERTEX_REGION") != "" {
+		os.Setenv("GCP_REGION", os.Getenv("VERTEX_REGION"))
+	}
+	if os.Getenv("GCP_KEY_FILE") == "" && os.Getenv("VERTEX_KEY_FILE") != "" {
+		os.Setenv("GCP_KEY_FILE", os.Getenv("VERTEX_KEY_FILE"))
+	}
+}
+
 func main() {
 	_ = godotenv.Load()
+	ensureGoogleCredentials()
 	cfg := config.Load()
 
 	// Logger
