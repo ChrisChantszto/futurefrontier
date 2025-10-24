@@ -449,26 +449,38 @@ func parseJWT(secret, token string) (jwt.MapClaims, error) {
 }
 
 func setCookie(c *fiber.Ctx, name, val string, ttl time.Duration, cfg config.Config) {
+	// Use SameSite=None for cross-origin requests (Vercel frontend + Railway backend)
+	sameSite := "None"
+	if cfg.CookieDomain != "" {
+		// If same domain, use Lax for better security
+		sameSite = "Lax"
+	}
+	
 	c.Cookie(&fiber.Cookie{
 		Name:     name,
 		Value:    val,
 		Expires:  time.Now().Add(ttl),
 		HTTPOnly: true,
-		Secure:   cfg.SecureCookies,
-		SameSite: "Lax",
+		Secure:   cfg.SecureCookies, // Must be true for SameSite=None
+		SameSite: sameSite,
 		Domain:   cfg.CookieDomain,
 		Path:     "/",
 	})
 }
 
 func clearCookie(c *fiber.Ctx, name string, cfg config.Config) {
+	sameSite := "None"
+	if cfg.CookieDomain != "" {
+		sameSite = "Lax"
+	}
+	
 	c.Cookie(&fiber.Cookie{
 		Name:     name,
 		Value:    "",
 		Expires:  time.Unix(0, 0),
 		HTTPOnly: true,
 		Secure:   cfg.SecureCookies,
-		SameSite: "Lax",
+		SameSite: sameSite,
 		Domain:   cfg.CookieDomain,
 		Path:     "/",
 	})
