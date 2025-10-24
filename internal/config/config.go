@@ -56,20 +56,20 @@ type SMTPConfig struct {
 }
 
 type LoggingConfig struct {
-	ProjectID          string
-	ElasticsearchURL   string
-	ElasticsearchUser  string
-	ElasticsearchPass  string
+	ProjectID           string
+	ElasticsearchURL    string
+	ElasticsearchUser   string
+	ElasticsearchPass   string
 	ElasticsearchAPIKey string // For Elastic Cloud API Key authentication
-	EnableRequestBody  bool
-	EnableResponseBody bool
-	EnableHeaders      bool
-	MaxBodySize        int64
-	QueueSize          int
-	WorkerCount        int
-	RetryAttempts      int
-	RetryInterval      int  // seconds
-	LocalMode          bool // for development - logs to file instead of ES
+	EnableRequestBody   bool
+	EnableResponseBody  bool
+	EnableHeaders       bool
+	MaxBodySize         int64
+	QueueSize           int
+	WorkerCount         int
+	RetryAttempts       int
+	RetryInterval       int  // seconds
+	LocalMode           bool // for development - logs to file instead of ES
 }
 
 type I18nConfig struct {
@@ -79,15 +79,15 @@ type I18nConfig struct {
 }
 
 type GoogleCloudConfig struct {
-	ProjectID              string // GCP Project ID
-	Location               string // Vertex AI location (e.g., us-central1, asia-southeast1)
-	CredentialsPath        string // Path to service account JSON key file
-	VertexAIModel          string // Model name (e.g., gemini-1.5-pro, gemini-1.5-flash)
-	VertexAIEndpoint       string // Optional custom endpoint
-	MaxTokens              int    // Max tokens for generation
-	Temperature            float64 // Temperature for generation (0.0-1.0)
-	TopP                   float64 // Top-p for generation
-	TopK                   int    // Top-k for generation
+	ProjectID        string  // GCP Project ID
+	Location         string  // Vertex AI location (e.g., us-central1, asia-southeast1)
+	CredentialsPath  string  // Path to service account JSON key file
+	VertexAIModel    string  // Model name (e.g., gemini-1.5-pro, gemini-1.5-flash)
+	VertexAIEndpoint string  // Optional custom endpoint
+	MaxTokens        int     // Max tokens for generation
+	Temperature      float64 // Temperature for generation (0.0-1.0)
+	TopP             float64 // Top-p for generation
+	TopK             int     // Top-k for generation
 }
 
 func getenv(key, def string) string {
@@ -205,7 +205,7 @@ func Load() Config {
 			ProjectID:        getenv("GCP_PROJECT_ID", ""),
 			Location:         getenv("GCP_LOCATION", "us-central1"),
 			CredentialsPath:  getenv("GOOGLE_APPLICATION_CREDENTIALS", ""),
-			VertexAIModel:    getenv("VERTEX_AI_MODEL", "gemini-1.5-flash"),
+			VertexAIModel:    getenv("VERTEX_AI_MODEL", "gemini-2.0-flash"),
 			VertexAIEndpoint: getenv("VERTEX_AI_ENDPOINT", ""),
 			MaxTokens:        atoi(getenv("VERTEX_AI_MAX_TOKENS", "8192"), 8192),
 			Temperature:      atof(getenv("VERTEX_AI_TEMPERATURE", "0.7"), 0.7),
